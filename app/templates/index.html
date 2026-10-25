@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Womo AI · Suche{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">DEIN KI-WOHNMOBILFINDER</p>
+  <h1>Finde nicht irgendein Wohnmobil.<br><span>Finde das richtige.</span></h1>
+  <p>Definiere deine Muss-Kriterien. Womo AI priorisiert Angebote nach Sicherheit, Technik, Preis und Familientauglichkeit.</p>
+</section>
+
+<section class="panel search-panel">
+  <div class="panel-head">
+    <div><p class="eyebrow">SUCHPROFIL</p><h2>Unser optimales Wohnmobil</h2></div>
+    <span class="status-dot">● aktiv</span>
+  </div>
+  <form method="post" action="/search" class="form-grid">
+    <label>Max. Preis (€)<input type="number" name="max_price" value="{{ defaults.max_price }}" min="1000" step="500"></label>
+    <label>Max. Entfernung (km)<input type="number" name="max_distance_km" value="{{ defaults.max_distance_km }}" min="10" step="10"></label>
+    <label>Min. Baujahr<input type="number" name="min_year" value="{{ defaults.min_year }}" min="1970" max="2030"></label>
+    <label>Max. Kilometer<input type="number" name="max_mileage" value="{{ defaults.max_mileage }}" min="10000" step="10000"></label>
+    <label>Max. Gesamtgewicht (kg)<input type="number" name="max_weight_kg" value="{{ defaults.max_weight_kg }}" min="2500" step="100"></label>
+    <label>Bevorzugter Motor<input type="text" name="preferred_engine" value="{{ defaults.preferred_engine }}" placeholder="z. B. 2.5 TD"></label>
+    <label>Reparatur-Toleranz
+      <select name="repair_tolerance">
+        <option value="light">nur kleine Arbeiten</option>
+        <option value="medium" selected>kleinere/mittlere Arbeiten</option>
+        <option value="heavy">auch größeres Projekt</option>
+      </select>
+    </label>
+    <div class="checks">
+      <label class="check"><input type="checkbox" name="require_alkoven" checked> Alkoven erforderlich</label>
+      <label class="check"><input type="checkbox" name="require_three_point_belt" checked> 3-Punkt-Gurt hinten stark priorisieren</label>
+    </div>
+    <button class="primary" type="submit">Angebote bewerten →</button>
+  </form>
+</section>
+
+<section class="feature-row">
+  <article><strong>100-Punkte-Score</strong><span>Technik, Sicherheit, Preis & Risiko</span></article>
+  <article><strong>KI-Kaufanalyse</strong><span>Stärken, Risiken und offene Fragen</span></article>
+  <article><strong>Marktüberwachung</strong><span>Collector & Alerts folgen in V0.2</span></article>
+</section>
+{% endblock %}
