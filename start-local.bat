@@ -28,9 +28,9 @@ if errorlevel 1 goto :error
 if not exist data mkdir data
 set DATA_DIR=data
 
-echo [3/3] Womo AI startet auf http://127.0.0.1:8000
+echo [3/3] Womo AI startet lokal auf http://127.0.0.1:8000
 start "" http://127.0.0.1:8000
-.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 exit /b 0
 
 :error
