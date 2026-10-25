@@ -8,6 +8,7 @@
   <link rel="icon" href="/static/womo-ai-icon.svg" type="image/svg+xml">
   <title>{% block title %}Womo AI{% endblock %}</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/archive.css">
 </head>
 <body>
   <header class="topbar">
@@ -20,10 +21,7 @@
       <span class="badge">MVP 0.9</span>
     </nav>
   </header>
-  <main class="page">
-    {% if item is defined and item.assessment %}{% include "assessment_panel.html" %}{% endif %}
-    {% block content %}{% endblock %}
-  </main>
+  <main class="page">{% block content %}{% endblock %}</main>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('/static/sw.js').catch(() => {}));
