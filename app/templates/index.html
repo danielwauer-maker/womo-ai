@@ -7,6 +7,15 @@
   <p>Beschreibe dein Wunsch-Wohnmobil in deinen eigenen Worten oder passe die erkannten Kriterien darunter an.</p>
 </section>
 
+{% if imported or existing or invalid %}
+<section class="import-summary">
+  <strong>Import abgeschlossen</strong>
+  <span>{{ imported }} neu</span>
+  <span>{{ existing }} bereits vorhanden</span>
+  {% if invalid %}<span>{{ invalid }} nicht erkannt</span>{% endif %}
+</section>
+{% endif %}
+
 <section class="panel search-panel">
   <div class="panel-head">
     <div><p class="eyebrow">KI-SUCHPROFIL</p><h2>Was suchst du?</h2></div>
@@ -40,9 +49,26 @@
   </form>
 </section>
 
+<section class="panel manual-panel" id="batch-import">
+  <div class="panel-head"><div><p class="eyebrow">SCHNELLIMPORT</p><h2>Mehrere Inserate gleichzeitig hinzufügen</h2></div></div>
+  <p class="muted">Füge beliebig viele Links untereinander ein oder lade eine TXT-Datei hoch. Womo AI erkennt Kleinanzeigen, mobile.de, AutoScout24, Caraworld und andere Quellen automatisch. Bereits bekannte Links werden nicht doppelt angelegt.</p>
+  <form method="post" action="/listings/batch" enctype="multipart/form-data" class="batch-form">
+    <label>Links einfügen
+      <textarea name="urls_text" rows="8" placeholder="https://www.kleinanzeigen.de/s-anzeige/...&#10;https://suchen.mobile.de/fahrzeuge/details.html?...&#10;https://www.autoscout24.de/angebote/..."></textarea>
+    </label>
+    <div class="upload-box">
+      <label>Oder TXT-Datei hochladen
+        <input type="file" name="file" accept=".txt,text/plain">
+      </label>
+      <small>Eine URL pro Zeile ist ideal. Gemischter Text funktioniert ebenfalls, solange die Links vollständig enthalten sind.</small>
+    </div>
+    <button class="primary" type="submit">Links ins Archiv importieren</button>
+  </form>
+</section>
+
 <section class="panel manual-panel">
-  <div class="panel-head"><div><p class="eyebrow">MANUELLER IMPORT</p><h2>Inserat hinzufügen</h2></div></div>
-  <p class="muted">Für Kleinanzeigen und andere Quellen kannst du eine URL dauerhaft in dein Archiv aufnehmen. Beschreibung und Preis kannst du direkt mitgeben.</p>
+  <div class="panel-head"><div><p class="eyebrow">EINZELIMPORT</p><h2>Inserat mit Details hinzufügen</h2></div></div>
+  <p class="muted">Wenn du Preis, Titel oder Beschreibung schon kennst, kannst du sie direkt mit abspeichern.</p>
   <form method="post" action="/listings/manual" class="manual-form">
     <input type="url" name="url" required placeholder="https://www.kleinanzeigen.de/s-anzeige/…">
     <input type="text" name="title" placeholder="Titel (optional)">
