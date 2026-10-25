@@ -1,11 +1,12 @@
 from math import ceil
+import re
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, Form, Query, Request
+from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import asc, desc, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .collectors.autoscout24 import AutoScout24Collector
@@ -17,10 +18,12 @@ from .repository import upsert_listing
 from .scoring import SearchCriteria, matches_hard_filters, score_listing
 from .search_intent import criteria_from_prompt
 
-app = FastAPI(title="Womo AI", version="0.2.0")
+app = FastAPI(title="Womo AI", version="0.3.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 Base.metadata.create_all(bind=engine)
+
+URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 
 
 def listing_dict(row: Listing) -> dict:
@@ -79,10 +82,62 @@ def detect_source(url: str) -> str:
     return host.replace("www.", "") or "manual"
 
 
+def normalize_url(url: str) -> str:
+    url = url.strip().rstrip(".,;)")
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return url
+
+
+def extract_urls(text: str) -> list[str]:
+    seen = set()
+    urls = []
+    for match in URL_RE.findall(text or ""):
+        url = normalize_url(match)
+        if url and url not in seen:
+            seen.add(url)
+            urls.append(url)
+    return urls
+
+
+def import_urls(db: Session, urls: list[str]) -> tuple[int, int]:
+    created = 0
+    existing = 0
+    for url in urls:
+        found = db.scalar(select(Listing).where(Listing.url == url))
+        if found:
+            existing += 1
+            upsert_listing(db, {"source": found.source, "url": url, "status": "active"})
+            continue
+        source = detect_source(url)
+        upsert_listing(db, {
+            "source": source,
+            "url": url,
+            "title": "Noch nicht analysiert",
+            "description": "",
+            "status": "active",
+        })
+        created += 1
+    return created, existing
+
+
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request, db: Session = Depends(get_db)):
+def home(
+    request: Request,
+    imported: int = Query(0),
+    existing: int = Query(0),
+    invalid: int = Query(0),
+    db: Session = Depends(get_db),
+):
     seed_once(db)
-    return templates.TemplateResponse("index.html", {"request": request, "defaults": SearchCriteria()})
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "defaults": SearchCriteria(),
+        "imported": imported,
+        "existing": existing,
+        "invalid": invalid,
+    })
 
 
 @app.get("/search", response_class=HTMLResponse)
@@ -151,11 +206,13 @@ def render_results(request, db, criteria, prompt, sort, direction, page, per_pag
     allowed_sort = {"score", "price", "distance_km", "year", "mileage", "first_seen_at", "last_seen_at"}
     sort = sort if sort in allowed_sort else "score"
     reverse = direction != "asc"
+
     def sort_key(item):
         value = item.get(sort)
         if value is None:
             return float("-inf") if reverse else float("inf")
         return value
+
     results.sort(key=sort_key, reverse=reverse)
 
     total = len(results)
@@ -190,13 +247,41 @@ def add_manual_listing(
     source = detect_source(url)
     upsert_listing(db, {
         "source": source,
-        "url": url.strip(),
+        "url": normalize_url(url),
         "title": title.strip() or "Noch nicht analysiert",
         "description": description.strip(),
         "price": price,
         "status": "active",
     })
     return RedirectResponse(url="/search?sort=first_seen_at&direction=desc", status_code=303)
+
+
+@app.post("/listings/batch")
+async def add_batch_listings(
+    urls_text: str = Form(""),
+    file: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+):
+    combined = urls_text or ""
+    invalid = 0
+    if file and file.filename:
+        raw = await file.read()
+        try:
+            combined += "\n" + raw.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                combined += "\n" + raw.decode("latin-1")
+            except UnicodeDecodeError:
+                invalid += 1
+
+    urls = extract_urls(combined)
+    raw_candidates = [line.strip() for line in combined.splitlines() if line.strip()]
+    invalid += max(0, len(raw_candidates) - len(urls))
+    created, existing = import_urls(db, urls)
+    return RedirectResponse(
+        url=f"/?imported={created}&existing={existing}&invalid={invalid}#batch-import",
+        status_code=303,
+    )
 
 
 @app.post("/sync/mobile")
@@ -230,4 +315,4 @@ def source_status():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.2.0"}
+    return {"status": "ok", "version": "0.3.0"}
