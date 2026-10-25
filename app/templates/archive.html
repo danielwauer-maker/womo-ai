@@ -1,23 +1,70 @@
 {% extends "base.html" %}
 {% block title %}Womo AI · Archiv{% endblock %}
 {% block content %}
-<section class="results-head">
+<section class="results-head archive-head">
   <div>
-    <p class="eyebrow">IMPORT-ARCHIV</p>
-    <h1>{{ total }} importierte Inserate</h1>
-    <p>Alle manuell hinzugefügten Links bleiben hier erhalten – unabhängig davon, ob sie bereits analysiert oder später nicht mehr verfügbar sind.</p>
+    <p class="eyebrow">ENTSCHEIDUNGS-ARCHIV</p>
+    <h1>{{ total }} Inserate im Vergleich</h1>
+    <p>Bewertung, Empfehlung und die wichtigsten Kaufkriterien direkt im Überblick. Unbekannte Werte werden nicht geschätzt.</p>
   </div>
   <a class="secondary" href="/#batch-import">+ Weitere Links importieren</a>
 </section>
 
-<section class="panel archive-toolbar">
-  <form method="get" action="/archive" class="archive-filters">
+<section class="panel archive-toolbar archive-toolbar-expanded">
+  <form method="get" action="/archive" class="archive-filters archive-filters-expanded">
     <label>Quelle
       <select name="source">
-        <option value="all">Alle</option>
+        <option value="all">Alle Quellen</option>
         {% for s in sources %}<option value="{{ s }}" {% if source==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
       </select>
     </label>
+
+    <label>Empfehlung
+      <select name="verdict">
+        <option value="all" {% if verdict=='all' %}selected{% endif %}>Alle Empfehlungen</option>
+        {% for v in ['sehr interessant','interessant','mit Vorbehalt','kritisch prüfen','eher nicht passend','zu wenig Daten'] %}
+          <option value="{{ v }}" {% if verdict==v %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Mind. Score
+      <select name="min_score">
+        <option value="">beliebig</option>
+        {% for n in [50,60,70,80,90] %}<option value="{{ n }}" {% if min_score==n %}selected{% endif %}>ab {{ n }}</option>{% endfor %}
+      </select>
+    </label>
+
+    <label>PLZ-Bezugspunkt
+      <input type="text" name="postal_code" inputmode="numeric" maxlength="5" value="{{ postal_code or '' }}" placeholder="z. B. 57614">
+    </label>
+
+    <label>Umkreis
+      <select name="max_distance_km">
+        <option value="">beliebig</option>
+        {% for n in [50,100,150,200,300,500] %}<option value="{{ n }}" {% if max_distance_km==n %}selected{% endif %}>bis {{ n }} km</option>{% endfor %}
+      </select>
+    </label>
+
+    <label>Preis von
+      <input type="number" name="min_price" min="0" step="500" value="{{ min_price if min_price is not none else '' }}" placeholder="0 €">
+    </label>
+
+    <label>Preis bis
+      <input type="number" name="max_price" min="0" step="500" value="{{ max_price if max_price is not none else '' }}" placeholder="11.000 €">
+    </label>
+
+    <label>Sortierung
+      <select name="sort">
+        <option value="score_desc" {% if sort=='score_desc' %}selected{% endif %}>Score: hoch → niedrig</option>
+        <option value="score_asc" {% if sort=='score_asc' %}selected{% endif %}>Score: niedrig → hoch</option>
+        <option value="price_asc" {% if sort=='price_asc' %}selected{% endif %}>Preis: günstig → teuer</option>
+        <option value="price_desc" {% if sort=='price_desc' %}selected{% endif %}>Preis: teuer → günstig</option>
+        <option value="distance_asc" {% if sort=='distance_asc' %}selected{% endif %}>Entfernung: nah → fern</option>
+        <option value="newest" {% if sort=='newest' %}selected{% endif %}>Neueste zuerst</option>
+      </select>
+    </label>
+
     <label>Importstatus
       <select name="state">
         <option value="all" {% if state=='all' %}selected{% endif %}>Alle</option>
@@ -28,6 +75,7 @@
         <option value="processing" {% if state=='processing' %}selected{% endif %}>In Verarbeitung</option>
       </select>
     </label>
+
     <label>Verfügbarkeit
       <select name="status">
         <option value="all" {% if status=='all' %}selected{% endif %}>Alle</option>
@@ -35,50 +83,89 @@
         <option value="inactive" {% if status=='inactive' %}selected{% endif %}>Nicht mehr verfügbar</option>
       </select>
     </label>
+
     <label>Pro Seite
       <select name="per_page">
         {% for n in [10,20,50,100] %}<option value="{{ n }}" {% if per_page==n %}selected{% endif %}>{{ n }}</option>{% endfor %}
       </select>
     </label>
-    <button class="secondary" type="submit">Filter anwenden</button>
+
+    <div class="archive-filter-actions">
+      <button class="primary" type="submit">Filter anwenden</button>
+      <a class="secondary" href="/archive">Zurücksetzen</a>
+    </div>
   </form>
+  <p class="archive-filter-note">Der Umkreis nutzt den bereits gespeicherten Entfernungswert des Inserats. Inserate ohne bekannte Entfernung werden bei aktivem Umkreisfilter ausgeblendet.</p>
 </section>
 
-<section class="archive-list">
+<section class="archive-list archive-decision-list">
 {% for item in items %}
-  <article class="archive-row">
+  {% set verdict_class = 'good' if item.verdict in ['sehr interessant','interessant'] else 'warn' if item.verdict in ['mit Vorbehalt','zu wenig Daten'] else 'bad' %}
+  <article class="archive-row archive-decision-row verdict-{{ verdict_class }}">
+    <div class="archive-source-column">
+      <span class="source-pill source-{{ item.source|lower|replace('.', '-')|replace(' ', '-') }}">{{ item.source }}</span>
+      {% if item.images %}
+        <a href="/listings/{{ item.id }}" class="archive-thumb"><img src="{{ item.images[0] }}" alt="{{ item.title or 'Wohnmobil' }}" loading="lazy"></a>
+      {% endif %}
+    </div>
+
     <div class="archive-main">
       <div class="archive-meta">
-        <span class="source-pill">{{ item.source }}</span>
         <span class="availability {{ item.status }}">{{ 'aktiv' if item.status=='active' else 'nicht mehr verfügbar' }}</span>
         <span class="import-state {{ item.import_state }}">{{ item.import_state }}</span>
       </div>
-      <h2><a href="/listings/{{ item.id }}" style="color:inherit;text-decoration:none">{{ item.title or 'Noch nicht analysiert' }}</a></h2>
-      <p class="archive-url">{{ item.url }}</p>
-      {% if item.import_message %}<p class="muted">{{ item.import_message }}</p>{% endif %}
-      <div class="facts">
+
+      <h2><a href="/listings/{{ item.id }}">{{ item.title or 'Noch nicht analysiert' }}</a></h2>
+      <p class="archive-location">{{ item.location or 'Standort unbekannt' }}{% if item.distance_km is not none %} · <strong>{{ item.distance_km|round|int }} km</strong>{% else %} · Entfernung offen{% endif %}</p>
+
+      <div class="facts archive-facts">
         <span>{% if item.price is not none %}<strong>{{ "{:,}".format(item.price).replace(",", ".") }} €</strong>{% else %}Preis offen{% endif %}</span>
         <span>{{ item.year or 'Bj. offen' }}</span>
         <span>{% if item.mileage is not none %}{{ "{:,}".format(item.mileage).replace(",", ".") }} km{% else %}km offen{% endif %}</span>
-        <span>Erstfund {{ item.first_seen_at.strftime('%d.%m.%Y %H:%M') if item.first_seen_at else '—' }}</span>
+        <span>{{ item.body_type or 'Aufbau offen' }}</span>
+        <span>{% if item.weight_kg %}{{ item.weight_kg }} kg{% else %}Gewicht offen{% endif %}</span>
       </div>
+
+      <div class="archive-signal-row">
+        <span>3-Punkt-Gurt: <strong>{% if item.three_point_belt is true %}ja{% elif item.three_point_belt is false %}nein{% else %}offen{% endif %}</strong></span>
+        <span>Feuchte: <strong>{% if item.technical.moisture_issue %}Hinweis vorhanden{% elif item.dry_status=='measured_dry' %}gemessen trocken{% elif item.dry_status=='claimed_dry' %}laut Anbieter trocken{% else %}offen{% endif %}</strong></span>
+        <span>Datenvertrauen: <strong>{{ item.confidence }} %</strong></span>
+      </div>
+
+      {% if item.assessment.blockers %}
+        <p class="archive-warning">! {{ item.assessment.blockers[0] }}</p>
+      {% elif item.assessment.risks %}
+        <p class="archive-caution">! {{ item.assessment.risks[0] }}</p>
+      {% elif item.assessment.positives %}
+        <p class="archive-positive">✓ {{ item.assessment.positives[0] }}</p>
+      {% endif %}
     </div>
-    <div class="archive-actions">
-      <a class="primary" href="/listings/{{ item.id }}">Details bearbeiten</a>
-      <a class="secondary" href="{{ item.url }}" target="_blank" rel="noopener">Original öffnen ↗</a>
-      <form method="post" action="/listings/{{ item.id }}/reprocess"><button class="secondary" type="submit">Erneut verarbeiten</button></form>
+
+    <div class="archive-decision">
+      <div class="archive-score score-{{ verdict_class }}">
+        <strong>{{ item.score }}</strong><span>/100</span>
+      </div>
+      <span class="verdict-badge verdict-{{ verdict_class }}">{{ item.verdict }}</span>
+      <a class="primary" href="/listings/{{ item.id }}">Details</a>
+      <a class="secondary" href="{{ item.url }}" target="_blank" rel="noopener">Original ↗</a>
+      <form method="post" action="/listings/{{ item.id }}/reprocess"><button class="secondary" type="submit">Neu verarbeiten</button></form>
     </div>
   </article>
 {% else %}
-  <div class="empty"><h2>Noch keine importierten Inserate</h2><p>Füge zuerst Links über den Schnellimport hinzu.</p><a class="primary" href="/#batch-import">Links importieren</a></div>
+  <div class="empty">
+    <h2>Keine passenden Inserate</h2>
+    <p>Mit den aktuellen Filtern wurde kein Inserat gefunden.</p>
+    <a class="primary" href="/archive">Filter zurücksetzen</a>
+  </div>
 {% endfor %}
 </section>
 
 {% if pages > 1 %}
 <nav class="pagination">
-  {% if page > 1 %}<a href="/archive?source={{ source }}&state={{ state }}&status={{ status }}&per_page={{ per_page }}&page={{ page-1 }}">← Zurück</a>{% endif %}
+  {% set query = 'source=' ~ source ~ '&state=' ~ state ~ '&status=' ~ status ~ '&postal_code=' ~ postal_code ~ '&max_distance_km=' ~ (max_distance_km or '') ~ '&min_price=' ~ (min_price or '') ~ '&max_price=' ~ (max_price or '') ~ '&min_score=' ~ (min_score or '') ~ '&verdict=' ~ verdict ~ '&sort=' ~ sort ~ '&per_page=' ~ per_page %}
+  {% if page > 1 %}<a href="/archive?{{ query }}&page={{ page-1 }}">← Zurück</a>{% endif %}
   <span>Seite {{ page }} von {{ pages }}</span>
-  {% if page < pages %}<a href="/archive?source={{ source }}&state={{ state }}&status={{ status }}&per_page={{ per_page }}&page={{ page+1 }}">Weiter →</a>{% endif %}
+  {% if page < pages %}<a href="/archive?{{ query }}&page={{ page+1 }}">Weiter →</a>{% endif %}
 </nav>
 {% endif %}
 {% endblock %}
