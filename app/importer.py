@@ -1,7 +1,7 @@
 import json
 import re
 from html import unescape
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 from sqlalchemy import select
@@ -32,14 +32,19 @@ def is_restricted(url: str) -> bool:
 
 
 def source_id_from_url(url: str) -> str | None:
-    path = urlparse(url).path
-    if "kleinanzeigen" in url:
+    parsed = urlparse(url)
+    path = parsed.path
+    lower_url = url.lower()
+    if "kleinanzeigen" in lower_url:
         m = re.search(r"/(\d{8,})-", path)
         return m.group(1) if m else None
-    if "mobile.de" in url:
+    if "mobile.de" in lower_url:
+        query_id = parse_qs(parsed.query).get("id", [None])[0]
+        if query_id:
+            return str(query_id)
         m = re.search(r"/(\d{6,})\.html", path)
         return m.group(1) if m else None
-    if "autoscout24" in url.lower():
+    if "autoscout24" in lower_url:
         parts = [p for p in path.split("/") if p]
         return parts[-1] if parts else None
     return None
@@ -50,6 +55,8 @@ def title_from_url(url: str) -> str:
     if not parts:
         return "Noch nicht analysiert"
     slug = parts[-1]
+    if slug.lower() in {"details.html", "details", "angebote"} and len(parts) > 1:
+        slug = parts[-2]
     slug = re.sub(r"\.(html?|php)$", "", slug, flags=re.I)
     slug = re.sub(r"[-_]", " ", slug)
     slug = re.sub(r"\b\d{6,}\b", "", slug)
