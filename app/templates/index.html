@@ -1,10 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Womo AI · Suche{% endblock %}
 {% block content %}
-<section class="hero">
+<section class="hero hero-compact">
   <p class="eyebrow">DEIN KI-WOHNMOBILFINDER</p>
-  <h1>Finde nicht irgendein Wohnmobil.<br><span>Finde das richtige.</span></h1>
-  <p>Beschreibe dein Wunsch-Wohnmobil in deinen eigenen Worten oder passe die erkannten Kriterien darunter an.</p>
+  <h1>Finde das passende Wohnmobil.</h1>
+  <p>Suchprofil festlegen, Inserate sammeln und die besten Kandidaten vergleichen.</p>
+  <div class="quick-links">
+    <a class="secondary" href="#search-profile">Suche</a>
+    <a class="secondary" href="#batch-import">Links importieren</a>
+    <a class="secondary" href="/archive">Archiv öffnen</a>
+  </div>
 </section>
 
 {% if imported or existing or invalid or extracted or awaiting %}
@@ -18,14 +23,14 @@
 </section>
 {% endif %}
 
-<section class="panel search-panel">
+<section class="panel search-panel" id="search-profile">
   <div class="panel-head">
     <div><p class="eyebrow">KI-SUCHPROFIL</p><h2>Was suchst du?</h2></div>
     <span class="status-dot">● aktiv</span>
   </div>
-  <form method="post" action="/search" class="form-grid">
-    <label class="full-span">Wunschbeschreibung
-      <textarea name="prompt" rows="4" placeholder="z. B. Wir sind 2 Erwachsene und 1 Kind. Maximal 11.000 €, Alkoven, 3-Punkt-Gurt hinten, möglichst 2.5 TD, unter 3,5 t. Kleinere Reparaturen sind okay."></textarea>
+  <form method="post" action="/search" class="form-grid compact-form-grid">
+    <label class="full-span prompt-field">Wunschbeschreibung
+      <textarea name="prompt" rows="3" placeholder="z. B. 2 Erwachsene + 1 Kind, max. 11.000 €, Alkoven, 3-Punkt-Gurt hinten, 2.5 TD, unter 3,5 t. Kleinere Reparaturen sind okay."></textarea>
     </label>
     <label>Max. Preis (€)<input type="number" name="max_price" value="{{ defaults.max_price }}" min="1000" step="500"></label>
     <label>Max. Entfernung (km)<input type="number" name="max_distance_km" value="{{ defaults.max_distance_km }}" min="10" step="10"></label>
@@ -43,7 +48,7 @@
     <label>Treffer pro Seite
       <select name="per_page"><option>5</option><option>10</option><option selected>20</option><option>50</option></select>
     </label>
-    <div class="checks">
+    <div class="checks compact-checks">
       <label class="check"><input type="checkbox" name="require_alkoven" checked> Alkoven erforderlich</label>
       <label class="check"><input type="checkbox" name="require_three_point_belt" checked> 3-Punkt-Gurt hinten priorisieren</label>
     </div>
@@ -51,36 +56,38 @@
   </form>
 </section>
 
-<section class="panel manual-panel" id="batch-import">
-  <div class="panel-head"><div><p class="eyebrow">SCHNELLIMPORT</p><h2>Mehrere Inserate gleichzeitig hinzufügen</h2></div></div>
-  <p class="muted">Füge beliebig viele Links untereinander ein oder lade eine TXT-Datei hoch. Womo AI archiviert jeden Link, erkennt die Quelle und versucht bei frei abrufbaren Seiten öffentliche Metadaten automatisch zu übernehmen.</p>
-  <form method="post" action="/listings/batch" enctype="multipart/form-data" class="batch-form">
-    <label>Links einfügen
-      <textarea name="urls_text" rows="8" placeholder="https://www.kleinanzeigen.de/s-anzeige/...&#10;https://suchen.mobile.de/fahrzeuge/details.html?...&#10;https://www.autoscout24.de/angebote/..."></textarea>
-    </label>
-    <div class="upload-box">
-      <label>Oder TXT-Datei hochladen
-        <input type="file" name="file" accept=".txt,text/plain">
+<section class="import-grid" id="batch-import">
+  <section class="panel manual-panel import-card">
+    <div class="panel-head"><div><p class="eyebrow">SCHNELLIMPORT</p><h2>Mehrere Links importieren</h2></div></div>
+    <p class="muted">Links untereinander einfügen oder eine TXT-Datei hochladen. Bekannte URLs werden nicht doppelt gespeichert.</p>
+    <form method="post" action="/listings/batch" enctype="multipart/form-data" class="batch-form batch-form-compact">
+      <label>Links
+        <textarea name="urls_text" rows="6" placeholder="https://www.kleinanzeigen.de/s-anzeige/...&#10;https://suchen.mobile.de/fahrzeuge/details.html?...&#10;https://www.autoscout24.de/angebote/..."></textarea>
       </label>
-      <small>Eine URL pro Zeile ist ideal. Bereits vorhandene Links werden nicht dupliziert.</small>
-    </div>
-    <button class="primary" type="submit">Links importieren & verarbeiten</button>
-  </form>
+      <div class="upload-box">
+        <label>TXT-Datei
+          <input type="file" name="file" accept=".txt,text/plain">
+        </label>
+        <small>Eine URL pro Zeile ist ideal.</small>
+      </div>
+      <button class="primary" type="submit">Links importieren</button>
+    </form>
+  </section>
+
+  <section class="panel manual-panel import-card">
+    <div class="panel-head"><div><p class="eyebrow">EINZELIMPORT</p><h2>Inserat mit Details</h2></div></div>
+    <p class="muted">Wenn du Titel, Preis oder Beschreibung schon kennst, speichere sie direkt mit ab.</p>
+    <form method="post" action="/listings/manual" class="manual-form single-import-form">
+      <input type="url" name="url" required placeholder="Inserat-URL">
+      <input type="text" name="title" placeholder="Titel (optional)">
+      <input type="number" name="price" placeholder="Preis € (optional)">
+      <textarea name="description" rows="5" placeholder="Beschreibung (optional)"></textarea>
+      <button class="secondary" type="submit">Zum Archiv hinzufügen</button>
+    </form>
+  </section>
 </section>
 
-<section class="panel manual-panel">
-  <div class="panel-head"><div><p class="eyebrow">EINZELIMPORT</p><h2>Inserat mit Details hinzufügen</h2></div></div>
-  <p class="muted">Bei Portalen ohne freigegebene API kannst du bekannte Daten direkt mit abspeichern. Der Original-Link bleibt dauerhaft archiviert.</p>
-  <form method="post" action="/listings/manual" class="manual-form">
-    <input type="url" name="url" required placeholder="https://www.kleinanzeigen.de/s-anzeige/…">
-    <input type="text" name="title" placeholder="Titel (optional)">
-    <input type="number" name="price" placeholder="Preis € (optional)">
-    <textarea name="description" rows="3" placeholder="Beschreibung einfügen (optional)"></textarea>
-    <button class="secondary" type="submit">Zum Archiv hinzufügen</button>
-  </form>
-</section>
-
-<section class="feature-row">
+<section class="feature-row feature-row-compact">
   <article><strong>Dauerhaftes Archiv</strong><span>Aktive und verschwundene Inserate bleiben vergleichbar</span></article>
   <article><strong>Import-Pipeline</strong><span>Quelle erkennen → Daten extrahieren → bewerten</span></article>
   <article><strong>API-Suche</strong><span>mobile.de vorbereitet · AutoScout24 nach Freischaltung</span></article>
