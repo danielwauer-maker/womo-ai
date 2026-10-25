@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .capture_routes import router as capture_router
 from .database import get_db
-from .models import Listing
+from .models import Listing, VehicleIdentity
 from .repository import upsert_listing
 from .scoring import SearchCriteria, score_listing
-from .text_enrichment import extract_listing_text
+from .text_enrichment import extract_listing_text, extract_vehicle_identity
 
 router = APIRouter()
 router.include_router(capture_router)
@@ -29,6 +30,7 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
     if not listing:
         return RedirectResponse(url="/archive", status_code=303)
 
+    identity = listing.vehicle_identity
     data = {
         "id": listing.id,
         "source": listing.source,
@@ -50,6 +52,11 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
         "dry_status": listing.dry_status,
         "repair_level": listing.repair_level,
         "status": listing.status,
+        "base_make": identity.base_make if identity else None,
+        "base_model": identity.base_model if identity else None,
+        "coachbuilder": identity.coachbuilder if identity else None,
+        "coach_model": identity.coach_model if identity else None,
+        "engine_text": identity.engine_text if identity else listing.engine,
         "images": [img.remote_url for img in listing.images],
         "prices": sorted(listing.prices, key=lambda x: x.observed_at, reverse=True),
         "capture_count": len(listing.captures),
@@ -72,8 +79,10 @@ def enrich_listing(
     year: str = Form(""),
     mileage: str = Form(""),
     location: str = Form(""),
-    make: str = Form(""),
-    model: str = Form(""),
+    base_make: str = Form(""),
+    base_model: str = Form(""),
+    coachbuilder: str = Form(""),
+    coach_model: str = Form(""),
     body_type: str = Form(""),
     engine: str = Form(""),
     power_kw: str = Form(""),
@@ -89,6 +98,8 @@ def enrich_listing(
         return RedirectResponse(url="/archive", status_code=303)
 
     extracted = extract_listing_text(raw_text, current_title=title or listing.title)
+    identity_auto = extract_vehicle_identity(raw_text, current_title=title or listing.title)
+
     manual = {
         "source": listing.source,
         "url": listing.url,
@@ -98,8 +109,8 @@ def enrich_listing(
         "year": _to_int(year),
         "mileage": _to_int(mileage),
         "location": location.strip() or None,
-        "make": make.strip() or None,
-        "model": model.strip() or None,
+        "make": coachbuilder.strip() or base_make.strip() or None,
+        "model": coach_model.strip() or None,
         "body_type": body_type.strip() or None,
         "engine": engine.strip() or None,
         "power_kw": _to_int(power_kw),
@@ -111,21 +122,29 @@ def enrich_listing(
         "status": listing.status,
     }
 
-    # Extracted values fill blanks; explicit form values always win.
     merged = dict(extracted)
     for key, value in manual.items():
         if value not in (None, ""):
             merged[key] = value
 
-    # Re-score with the enriched information before persisting.
     score, reasons = score_listing(merged, SearchCriteria())
     merged["score"] = score
     merged["score_explanation"] = ", ".join(reasons)
     upsert_listing(db, merged)
 
+    vehicle = db.scalar(select(VehicleIdentity).where(VehicleIdentity.listing_id == listing_id))
+    if not vehicle:
+        vehicle = VehicleIdentity(listing_id=listing_id)
+        db.add(vehicle)
+    vehicle.base_make = base_make.strip() or identity_auto.get("base_make")
+    vehicle.base_model = base_model.strip() or identity_auto.get("base_model")
+    vehicle.coachbuilder = coachbuilder.strip() or identity_auto.get("coachbuilder")
+    vehicle.coach_model = coach_model.strip() or identity_auto.get("coach_model")
+    vehicle.engine_text = engine.strip() or identity_auto.get("engine") or listing.engine
+
     if listing.import_state:
         listing.import_state.state = "enriched"
         listing.import_state.message = "Inseratstext wurde übernommen und strukturiert ausgewertet."
-        db.commit()
+    db.commit()
 
     return RedirectResponse(url=f"/listings/{listing_id}", status_code=303)
