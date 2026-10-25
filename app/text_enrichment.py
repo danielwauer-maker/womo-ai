@@ -74,8 +74,6 @@ def extract_vehicle_identity(primary_text: str, current_title: str = "", fallbac
     if not result.get("base_make"):
         detect_base(fallback[:5000])
 
-    # Coachbuilder must come from title/description first. Fallback is only allowed
-    # when the fallback contains a nearby vehicle heading, not arbitrary recommendations.
     for name in COACHBUILDERS:
         if re.search(rf"\b{re.escape(name)}\b", primary, re.I):
             result["coachbuilder"] = "Bürstner" if name == "Buerstner" else name
@@ -118,17 +116,21 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
     lower = raw.lower()
     result: dict = {}
 
-    prices = re.findall(r"(?<!\d)(\d{1,3}(?:[\.\s]\d{3})+|\d{4,6})\s*(?:€|eur)(?:\b|\s|$)", raw, re.I)
-    if prices:
-        result["price"] = _number(prices[0])
+    price_patterns = [
+        r"(?:€|eur)\s*(\d{1,3}(?:[\.\s]\d{3})+|\d{4,6})(?:\b|\s|$)",
+        r"(?<!\d)(\d{1,3}(?:[\.\s]\d{3})+|\d{4,6})\s*(?:€|eur)(?:\b|\s|$)",
+    ]
+    for pattern in price_patterns:
+        m = re.search(pattern, raw, re.I)
+        if m:
+            result["price"] = _number(m.group(1))
+            break
 
     for pattern in [r"(?:kilometer(?:stand)?|km[- ]?stand)\s*[:\-]?\s*(\d{1,3}(?:[\.\s]\d{3})+|\d{4,7})", r"(\d{1,3}(?:[\.\s]\d{3})+)\s*km\b"]:
         m = re.search(pattern, raw, re.I)
         if m:
             result["mileage"] = _number(m.group(1)); break
 
-    # Never use an arbitrary 4-digit year from page text: TÜV/HU/Gas dates can be newer
-    # than the vehicle. Only explicit vehicle-year labels or the title are accepted.
     labelled_year = re.search(r"(?:erstzulassung|ez|baujahr|bj\.?)\s*[:\-]?\s*(?:\d{1,2}[\/.\-])?(19[7-9]\d|20[0-2]\d)", raw, re.I)
     title_year = re.search(r"(?:bj\.?|baujahr|ez)\s*[:\-]?\s*(19[7-9]\d|20[0-2]\d)", current_title or "", re.I)
     if labelled_year:
