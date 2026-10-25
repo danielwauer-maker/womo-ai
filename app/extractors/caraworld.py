@@ -74,7 +74,6 @@ class CaraworldExtractor(BaseExtractor):
         if re.search(r"(?:^|\n)Aufbauart\s*\n?\s*Alkoven(?:\n|$)", text, re.I) or re.search(r"\bAlkoven\b", description, re.I):
             result.fields["body_type"] = "Alkoven"
 
-        # Never accept a coachbuilder that only appears in recommendations/footer.
         header = "\n".join([line for line in text.splitlines() if line.strip()][:45])
         coach = result.identity.get("coachbuilder")
         if coach and not re.search(rf"\b{re.escape(coach)}\b", header, re.I) and not re.search(rf"\b{re.escape(coach)}\b", description, re.I):
@@ -88,6 +87,6 @@ class CaraworldExtractor(BaseExtractor):
 
         normalized = _normalize_caraworld_images(result.images)
         if normalized:
-            result.images = normalized
+            result.images = normalized[:reported] if reported else normalized
 
         return result
