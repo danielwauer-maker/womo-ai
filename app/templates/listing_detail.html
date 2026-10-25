@@ -61,6 +61,40 @@
   {% endif %}
 </section>
 
+{% if item.technical %}
+<section class="panel manual-panel">
+  <div class="panel-head"><div><p class="eyebrow">FAHRZEUGDATEN</p><h2>Technik, Historie & Ausstattung</h2></div></div>
+  <div class="analysis-grid">
+    <div>
+      <h3>Technische Daten</h3>
+      {% if item.technical.first_registration %}<p>Erstzulassung: <strong>{{ item.technical.first_registration }}</strong></p>{% endif %}
+      {% if item.technical.fuel %}<p>Kraftstoff: <strong>{{ item.technical.fuel }}</strong></p>{% endif %}
+      {% if item.technical.displacement_cc %}<p>Hubraum: <strong>{{ item.technical.displacement_cc }} cm³</strong></p>{% endif %}
+      {% if item.power_kw %}<p>Leistung: <strong>{{ item.power_kw }} kW</strong></p>{% endif %}
+      {% if item.technical.transmission %}<p>Getriebe: <strong>{{ item.technical.transmission }}</strong></p>{% endif %}
+      {% if item.technical.emissions_standard %}<p>Abgasnorm: <strong>{{ item.technical.emissions_standard }}</strong></p>{% endif %}
+      {% if item.technical.color %}<p>Farbe: <strong>{{ item.technical.color }}</strong></p>{% endif %}
+      {% if item.seats %}<p>Sitzplätze: <strong>{{ item.seats }}</strong></p>{% endif %}
+      {% if item.weight_kg %}<p>Zul. Gesamtgewicht: <strong>{{ item.weight_kg }} kg</strong></p>{% endif %}
+    </div>
+    <div>
+      <h3>Historie / Zustand</h3>
+      {% if item.technical.tuev %}<p>{{ item.technical.tuev }}</p>{% endif %}
+      {% if item.technical.service_history %}<p>{{ item.technical.service_history }}</p>{% endif %}
+      {% if item.technical.engine_replaced %}<p><strong>Austauschmotor vorhanden</strong> · Laufleistung/Datum/Nachweis noch unbekannt</p>{% endif %}
+      {% if item.technical.provider_condition_claim %}<p>Zustand laut Anbieter: <strong>{{ item.technical.provider_condition_claim }}</strong></p>{% endif %}
+      <p class="muted">Anbieterangaben werden als Behauptung gespeichert und nicht automatisch als technisch bestätigt gewertet.</p>
+    </div>
+  </div>
+  {% if item.technical.equipment %}
+  <div>
+    <h3>Ausstattung</h3>
+    <div class="facts">{% for feature in item.technical.equipment %}<span>{{ feature }}</span>{% endfor %}</div>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if item.portal_listing_id or item.listed_at_text or item.seller_active_since or item.seller_ads_online is not none or item.seller_badges or item.views is not none or item.watchers is not none or item.dealer_name %}
 <section class="panel manual-panel">
   <div class="panel-head"><div><p class="eyebrow">PORTAL-SIGNALE</p><h2>Interesse & Vertrauensdaten</h2></div></div>
