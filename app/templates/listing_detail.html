@@ -10,12 +10,22 @@
   <a class="secondary" href="/archive">← Zurück zum Archiv</a>
 </section>
 
+{% if request.query_params.get('captured') == '1' %}
+<section class="import-summary">
+  <strong>One-Tap Capture erfolgreich ✓</strong>
+  <span>{{ item.images|length }} Bildreferenzen</span>
+  <span>Score {{ item.score }}/100</span>
+  <span>{{ item.capture_count }} Capture{% if item.capture_count != 1 %}s{% endif %}</span>
+</section>
+{% endif %}
+
 <section class="panel search-panel">
   <div class="panel-head">
     <div><p class="eyebrow">AKTUELLER STAND</p><h2>{{ item.score }}/100 Punkte</h2></div>
     <span class="import-state {{ item.import_state }}">{{ item.import_state }}</span>
   </div>
   {% if item.import_message %}<p class="import-message">{{ item.import_message }}</p>{% endif %}
+  {% if item.last_capture_at %}<p class="muted">Zuletzt per One-Tap Capture übernommen: {{ item.last_capture_at.strftime('%d.%m.%Y %H:%M') }}</p>{% endif %}
   <div class="facts">
     <span>{% if item.price is not none %}<strong>{{ "{:,}".format(item.price).replace(",", ".") }} €</strong>{% else %}Preis offen{% endif %}</span>
     <span>{{ item.year or 'Bj. offen' }}</span>
@@ -42,15 +52,16 @@
 <section class="panel manual-panel">
   <div class="panel-head">
     <div>
-      <p class="eyebrow">DATEN ERGÄNZEN</p>
-      <h2>Inseratstext einfügen und automatisch auswerten</h2>
+      <p class="eyebrow">KORREKTUR / FALLBACK</p>
+      <h2>Automatisch übernommene Daten prüfen</h2>
     </div>
+    <a class="secondary" href="/capture/setup">One-Tap Capture einrichten</a>
   </div>
-  <p class="muted">Kopiere am besten die komplette Beschreibung sowie sichtbare technische Daten aus dem Inserat. Womo AI versucht daraus Preis, Baujahr, Kilometer, Motor, Gewicht, Sitzplätze, Gurt- und Feuchtehinweise zu erkennen. Alles bleibt anschließend manuell korrigierbar.</p>
+  <p class="muted">Normalerweise sollst du hier nichts mehr kopieren müssen. Nutze dieses Formular nur, wenn ein Portal einzelne Daten nicht im geöffneten Inserat bereitstellt oder die automatische Erkennung korrigiert werden soll.</p>
 
   <form method="post" action="/listings/{{ item.id }}/enrich" class="form-grid compact-form-grid">
-    <label class="full-span prompt-field">Kompletter Inseratstext
-      <textarea name="raw_text" rows="12" placeholder="Beschreibung und technische Daten hier einfügen ...">{{ item.description or '' }}</textarea>
+    <label class="full-span prompt-field">Inseratstext / Beschreibung
+      <textarea name="raw_text" rows="12" placeholder="Nur falls etwas fehlt oder korrigiert werden muss ...">{{ item.description or '' }}</textarea>
     </label>
 
     <label class="full-span">Titel
@@ -96,13 +107,13 @@
     </label>
 
     <div></div>
-    <button class="primary" type="submit">Text auswerten & Daten speichern →</button>
+    <button class="primary" type="submit">Korrekturen speichern & neu bewerten →</button>
   </form>
 </section>
 
 {% if item.images %}
 <section class="panel manual-panel">
-  <div class="panel-head"><div><p class="eyebrow">BILDER</p><h2>{{ item.images|length }} gespeicherte Bildreferenzen</h2></div></div>
+  <div class="panel-head"><div><p class="eyebrow">BILDER</p><h2>{{ item.images|length }} automatisch übernommene Bildreferenzen</h2></div></div>
   <div class="detail-gallery">
     {% for image in item.images %}<img src="{{ image }}" alt="Inseratsbild" loading="lazy">{% endfor %}
   </div>
