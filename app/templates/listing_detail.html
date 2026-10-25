@@ -30,8 +30,12 @@
     <span>{% if item.price is not none %}<strong>{{ "{:,}".format(item.price).replace(",", ".") }} €</strong>{% else %}Preis offen{% endif %}</span>
     <span>{{ item.year or 'Bj. offen' }}</span>
     <span>{% if item.mileage is not none %}{{ "{:,}".format(item.mileage).replace(",", ".") }} km{% else %}km offen{% endif %}</span>
-    <span>{{ item.engine or 'Motor offen' }}</span>
+    <span>{{ item.engine_text or item.engine or 'Motor offen' }}</span>
     <span>{% if item.weight_kg %}{{ item.weight_kg }} kg{% else %}Gewicht offen{% endif %}</span>
+  </div>
+  <div class="facts">
+    <span>Basis: <strong>{{ ((item.base_make or '') ~ ' ' ~ (item.base_model or '')).strip() or 'offen' }}</strong></span>
+    <span>Aufbau: <strong>{{ ((item.coachbuilder or '') ~ ' ' ~ (item.coach_model or '')).strip() or 'offen' }}</strong></span>
   </div>
   {% if item.score_reasons %}
     <div class="analysis-grid">
@@ -73,14 +77,17 @@
     <label>Kilometer<input type="number" name="mileage" value="{{ item.mileage or '' }}"></label>
 
     <label>Standort<input type="text" name="location" value="{{ item.location or '' }}"></label>
-    <label>Hersteller<input type="text" name="make" value="{{ item.make or '' }}"></label>
-    <label>Modell<input type="text" name="model" value="{{ item.model or '' }}"></label>
+    <label>Basisfahrzeug Hersteller<input type="text" name="base_make" value="{{ item.base_make or '' }}" placeholder="z. B. Fiat"></label>
+    <label>Basisfahrzeug Modell<input type="text" name="base_model" value="{{ item.base_model or '' }}" placeholder="z. B. Ducato"></label>
 
+    <label>Aufbauhersteller<input type="text" name="coachbuilder" value="{{ item.coachbuilder or '' }}" placeholder="z. B. LMC"></label>
+    <label>Aufbaumodell<input type="text" name="coach_model" value="{{ item.coach_model or '' }}" placeholder="z. B. Liberty 6400"></label>
     <label>Aufbauart<input type="text" name="body_type" value="{{ item.body_type or '' }}" placeholder="z. B. Alkoven"></label>
-    <label>Motor<input type="text" name="engine" value="{{ item.engine or '' }}" placeholder="z. B. 2.5 TD"></label>
-    <label>Leistung (kW)<input type="number" name="power_kw" value="{{ item.power_kw or '' }}"></label>
 
+    <label>Motor<input type="text" name="engine" value="{{ item.engine_text or item.engine or '' }}" placeholder="z. B. 2.5 Turbo Diesel"></label>
+    <label>Leistung (kW)<input type="number" name="power_kw" value="{{ item.power_kw or '' }}"></label>
     <label>Sitzplätze<input type="number" name="seats" value="{{ item.seats or '' }}"></label>
+
     <label>Gesamtgewicht (kg)<input type="number" name="weight_kg" value="{{ item.weight_kg or '' }}"></label>
     <label>3-Punkt-Gurt
       <select name="three_point_belt">
@@ -89,7 +96,6 @@
         <option value="no" {% if item.three_point_belt is false %}selected{% endif %}>nein</option>
       </select>
     </label>
-
     <label>Feuchtigkeit
       <select name="dry_status">
         <option value="unknown" {% if item.dry_status=='unknown' %}selected{% endif %}>unklar</option>
@@ -97,6 +103,7 @@
         <option value="measured_dry" {% if item.dry_status=='measured_dry' %}selected{% endif %}>gemessen trocken</option>
       </select>
     </label>
+
     <label>Reparaturbedarf
       <select name="repair_level">
         <option value="unknown" {% if item.repair_level=='unknown' %}selected{% endif %}>unklar</option>
@@ -106,7 +113,7 @@
       </select>
     </label>
 
-    <div></div>
+    <div></div><div></div>
     <button class="primary" type="submit">Korrekturen speichern & neu bewerten →</button>
   </form>
 </section>
