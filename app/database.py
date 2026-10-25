@@ -5,7 +5,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    data_dir = Path(os.getenv("DATA_DIR", "/tmp/womo-ai"))
+    data_dir = Path(os.getenv("DATA_DIR", "data"))
     data_dir.mkdir(parents=True, exist_ok=True)
     DATABASE_URL = f"sqlite:///{data_dir / 'womo-ai.db'}"
 
