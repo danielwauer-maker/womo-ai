@@ -25,7 +25,7 @@ jobs:
             cd /opt/womo-ai
             rm -rf data/review-artifacts
             mkdir -p data/review-artifacts
-            docker compose -f docker-compose.review.yml exec -T womo-ai python /app/scripts/build_review_artifacts.py
+            docker compose -f docker-compose.review.yml exec -T womo-ai python -m scripts.build_review_artifacts
 
       - name: Download review artifacts
         uses: appleboy/scp-action@v0.1.7
