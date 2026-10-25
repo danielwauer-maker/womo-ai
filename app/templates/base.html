@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#15243a">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/womo-ai-icon.svg" type="image/svg+xml">
   <title>{% block title %}Womo AI{% endblock %}</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
@@ -11,11 +14,16 @@
     <a class="brand" href="/"><span class="brand-mark">W</span><span>Womo AI</span></a>
     <nav class="topnav">
       <a href="/">Suche</a>
-      <a href="/#batch-import">Import</a>
+      <a href="/share">Import</a>
       <a href="/archive">Archiv</a>
-      <span class="badge">MVP 0.5</span>
+      <span class="badge">MVP 0.6</span>
     </nav>
   </header>
   <main class="page">{% block content %}{% endblock %}</main>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/static/sw.js').catch(() => {}));
+    }
+  </script>
 </body>
 </html>
