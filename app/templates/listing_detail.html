@@ -4,7 +4,13 @@
 <section class="results-head">
   <div>
     <p class="eyebrow">INSERAT-DETAIL</p>
-    <h1>{{ item.title or 'Noch nicht analysiert' }}</h1>
+    <h1>
+      {% if item.source == 'mobile.de' and item.coachbuilder %}
+        {{ item.coachbuilder }}{% if item.coach_model %} {{ item.coach_model }}{% endif %}{% if item.base_make or item.base_model %} · {{ ((item.base_make or '') ~ ' ' ~ (item.base_model or '')).strip() }}{% endif %}
+      {% else %}
+        {{ item.title or 'Noch nicht analysiert' }}
+      {% endif %}
+    </h1>
     <p>{{ item.source }} · <a href="{{ item.url }}" target="_blank" rel="noopener">Original öffnen ↗</a></p>
   </div>
   <a class="secondary" href="/archive">← Zurück zum Archiv</a>
@@ -14,8 +20,8 @@
 <section class="import-summary">
   <strong>One-Tap Capture erfolgreich ✓</strong>
   <span>{{ item.images|length }} Bildreferenzen</span>
-  {% if item.reported_image_count %}<span>Portal: {{ item.reported_image_count }} Bilder</span>{% endif %}
-  {% if item.missing_image_count %}<span>{{ item.missing_image_count }} Bilder fehlen</span>{% endif %}
+  {% if item.reported_image_count and item.source != 'mobile.de' %}<span>Portal: {{ item.reported_image_count }} Bilder</span>{% endif %}
+  {% if item.missing_image_count and item.source != 'mobile.de' %}<span>{{ item.missing_image_count }} Bilder fehlen</span>{% endif %}
   <span>Score {{ item.score }}/100</span>
   <span>{{ item.capture_count }} Capture{% if item.capture_count != 1 %}s{% endif %}</span>
 </section>
@@ -131,10 +137,14 @@
 
 {% if item.images %}
 <section class="panel manual-panel">
-  <div class="panel-head"><div><p class="eyebrow">BILDER</p><h2>{{ item.images|length }} automatisch übernommene Bildreferenzen{% if item.reported_image_count %} / {{ item.reported_image_count }} gemeldet{% endif %}</h2></div></div>
-  {% if item.missing_image_count %}<p class="import-message">Noch {{ item.missing_image_count }} vom Portal gemeldete Bilder fehlen im Capture.</p>{% endif %}
-  <div class="detail-gallery">
-    {% for image in item.images %}<img src="{{ image }}" alt="Inseratsbild" loading="lazy">{% endfor %}
+  <div class="panel-head"><div><p class="eyebrow">BILDER</p><h2>{{ item.images|length }} automatisch übernommene Fahrzeugbilder{% if item.reported_image_count and item.source != 'mobile.de' %} / {{ item.reported_image_count }} gemeldet{% endif %}</h2></div></div>
+  {% if item.missing_image_count and item.source != 'mobile.de' %}<p class="import-message">Noch {{ item.missing_image_count }} vom Portal gemeldete Bilder fehlen im Capture.</p>{% endif %}
+  <div class="detail-gallery detail-gallery-compact">
+    {% for image in item.images %}
+      <a class="gallery-thumb" href="{{ image }}" target="_blank" rel="noopener" title="Bild groß öffnen">
+        <img src="{{ image }}" alt="Inseratsbild {{ loop.index }}" loading="lazy">
+      </a>
+    {% endfor %}
   </div>
 </section>
 {% endif %}
