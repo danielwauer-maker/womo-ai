@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Womo AI · One-Tap Capture{% endblock %}
 {% block content %}
+<style>
+.capture-panel{padding:24px;margin-bottom:18px}.capture-bookmarklet-box{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:18px 0 12px}.capture-bookmarklet{background:#f38b2a}.bookmarklet-code{width:100%;min-height:92px;border:1px solid #d7dde5;border-radius:10px;padding:12px;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f8fafc;color:#516072}.capture-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:18px 0}.capture-steps article{padding:20px}.capture-steps strong,.capture-steps span{display:block}.capture-steps strong{font-size:17px;margin-bottom:7px}.capture-steps span{color:#687384;font-size:13px}.capture-note h2{margin-top:0}@media(max-width:760px){.capture-steps{grid-template-columns:1fr}.capture-bookmarklet-box>*{width:100%}.capture-panel{padding:18px}}
+</style>
+
 <section class="results-head">
   <div>
     <p class="eyebrow">ONE-TAP CAPTURE</p>
@@ -13,8 +17,9 @@
 <section class="panel capture-panel">
   <div class="panel-head">
     <div>
-      <h2>1. Capture-Favorit anlegen</h2>
-      <p class="muted">Diese Installation sendet an <strong>{{ origin }}</strong>. Wenn du den Favoriten am Handy einrichtest, öffne diese Seite vorher über die Netzwerk-IP deines Laptops.</p>
+      <p class="eyebrow">SCHRITT 1</p>
+      <h2>Capture-Favorit anlegen</h2>
+      <p class="muted">Dieser Favorit sendet an <strong>{{ origin }}</strong>. Fürs Handy musst du diese Setup-Seite deshalb über die Netzwerk-IP deines Laptops öffnen – nicht über 127.0.0.1.</p>
     </div>
   </div>
 
@@ -28,20 +33,21 @@
 <section class="capture-steps">
   <article class="panel">
     <strong>Desktop</strong>
-    <span>Ziehe den Button „Womo AI · Inserat übernehmen“ in deine Lesezeichenleiste. Öffne danach ein Inserat und klicke den Favoriten.</span>
+    <span>Ziehe den orangefarbenen Button in deine Lesezeichenleiste. Öffne danach ein Inserat und klicke den Favoriten.</span>
   </article>
   <article class="panel">
     <strong>iPhone / iPad</strong>
-    <span>Lege in Safari zunächst irgendein Lesezeichen an, bearbeite es anschließend und ersetze die Adresse durch den kopierten Bookmarklet-Code. Öffne dann ein Inserat und starte den Favoriten.</span>
+    <span>Lege in Safari zunächst irgendein Lesezeichen an. Bearbeite es anschließend und ersetze die Adresse durch den kopierten Bookmarklet-Code. Auf dem Inserat öffnest du dann dieses Lesezeichen.</span>
   </article>
   <article class="panel">
-    <strong>Ergebnis</strong>
+    <strong>Danach automatisch</strong>
     <span>Womo AI übernimmt URL, Titel, Beschreibung, Seitentext, strukturierte Daten und gefundene Bilder, berechnet den Score und öffnet direkt die Detailseite.</span>
   </article>
 </section>
 
 <section class="panel capture-panel capture-note">
-  <h2>Was automatisch übernommen wird</h2>
+  <p class="eyebrow">ERFASSTE DATEN</p>
+  <h2>So viel wie die geöffnete Seite hergibt</h2>
   <div class="criteria-strip">
     <span>URL</span><span>Titel</span><span>Preis</span><span>Baujahr</span><span>Kilometer</span><span>Motor / Leistung</span><span>Gewicht</span><span>Sitzplätze</span><span>Beschreibung</span><span>JSON-LD</span><span>Bild-URLs</span><span>WomoScore</span>
   </div>
@@ -57,7 +63,9 @@
       button.textContent = 'Kopiert ✓';
       setTimeout(() => button.textContent = 'Bookmarklet-Code kopieren', 1800);
     } catch (e) {
-      document.getElementById('bookmarklet-code').select();
+      const field = document.getElementById('bookmarklet-code');
+      field.focus();
+      field.select();
     }
   });
 </script>
