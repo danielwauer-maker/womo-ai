@@ -37,6 +37,7 @@ class Listing(Base):
     images: Mapped[list["ListingImage"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
     prices: Mapped[list["PriceHistory"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
     captures: Mapped[list["CaptureSnapshot"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
+    vehicle_identity: Mapped["VehicleIdentity | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
     import_state: Mapped["ImportState | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
 
 class ListingImage(Base):
@@ -68,6 +69,18 @@ class CaptureSnapshot(Base):
     image_urls_json: Mapped[str] = mapped_column(Text, default="[]")
     captured_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     listing: Mapped[Listing] = relationship(back_populates="captures")
+
+class VehicleIdentity(Base):
+    __tablename__ = "vehicle_identities"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"), unique=True, index=True)
+    base_make: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    base_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    coachbuilder: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    coach_model: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    engine_text: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    listing: Mapped[Listing] = relationship(back_populates="vehicle_identity")
 
 class ImportState(Base):
     __tablename__ = "import_states"
