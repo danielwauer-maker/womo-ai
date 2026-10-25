@@ -18,8 +18,9 @@ from .importer import process_listing
 from .models import Listing
 from .repository import upsert_listing
 from .review_routes import router as review_router
-from .scoring import SearchCriteria, matches_hard_filters, score_listing
+from .scoring import SearchCriteria, assess_listing, matches_hard_filters, score_listing
 from .search_intent import criteria_from_prompt
+from .technical_data import loads_technical_data
 
 app = FastAPI(title="Womo AI", version="0.9.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -33,11 +34,19 @@ URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 
 
 def listing_dict(row: Listing) -> dict:
+    identity = row.vehicle_identity
+    technical = loads_technical_data(row.technical_data.data_json) if row.technical_data else {}
     return {
         "id": row.id, "source": row.source, "source_id": row.source_id, "url": row.url,
         "title": row.title, "description": row.description, "price": row.price, "year": row.year,
         "mileage": row.mileage, "distance_km": row.distance_km, "location": row.location,
         "make": row.make, "model": row.model, "body_type": row.body_type, "engine": row.engine,
+        "engine_text": identity.engine_text if identity else row.engine,
+        "base_make": identity.base_make if identity else None,
+        "base_model": identity.base_model if identity else None,
+        "coachbuilder": identity.coachbuilder if identity else None,
+        "coach_model": identity.coach_model if identity else None,
+        "technical": technical,
         "power_kw": row.power_kw, "seats": row.seats, "weight_kg": row.weight_kg,
         "three_point_belt": row.three_point_belt, "dry_status": row.dry_status,
         "repair_level": row.repair_level, "status": row.status,
@@ -147,20 +156,58 @@ def share_import(url: str = Form(...), title: str = Form(""), text: str = Form("
 
 
 @app.get("/archive", response_class=HTMLResponse)
-def archive(request: Request, source: str = Query("all"), state: str = Query("all"), status: str = Query("all"),
-            page: int = Query(1, ge=1), per_page: int = Query(50, ge=10, le=100), db: Session = Depends(get_db)):
+def archive(
+    request: Request,
+    source: str = Query("all"), state: str = Query("all"), status: str = Query("all"),
+    postal_code: str = Query(""), max_distance_km: int | None = Query(None, ge=0, le=1000),
+    min_price: int | None = Query(None, ge=0), max_price: int | None = Query(None, ge=0),
+    min_score: int | None = Query(None, ge=0, le=100), verdict: str = Query("all"),
+    sort: str = Query("score_desc"), page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=10, le=100), db: Session = Depends(get_db)
+):
     cleanup_test_data(db)
     rows = db.scalars(select(Listing).order_by(Listing.first_seen_at.desc())).all()
+    criteria = SearchCriteria()
     filtered = []
+    verdicts = {"sehr interessant", "interessant", "mit Vorbehalt", "kritisch prüfen", "eher nicht passend", "zu wenig Daten"}
+
     for row in rows:
         item = listing_dict(row)
+        assessment = assess_listing(item, criteria)
+        item["assessment"] = assessment
+        item["score"] = assessment["score"]
+        item["verdict"] = assessment["verdict"]
+        item["confidence"] = assessment["confidence"]
+
         if source != "all" and item["source"] != source:
             continue
         if state != "all" and item["import_state"] != state:
             continue
         if status != "all" and item["status"] != status:
             continue
+        if min_price is not None and (item["price"] is None or item["price"] < min_price):
+            continue
+        if max_price is not None and (item["price"] is None or item["price"] > max_price):
+            continue
+        if min_score is not None and item["score"] < min_score:
+            continue
+        if verdict != "all" and verdict in verdicts and item["verdict"] != verdict:
+            continue
+        if max_distance_km is not None and (item["distance_km"] is None or item["distance_km"] > max_distance_km):
+            continue
         filtered.append(item)
+
+    sorters = {
+        "score_desc": lambda x: (x.get("score") is not None, x.get("score") or -1),
+        "score_asc": lambda x: (x.get("score") is None, -(x.get("score") or 0)),
+        "price_asc": lambda x: (x.get("price") is None, -(x.get("price") or 0)),
+        "price_desc": lambda x: (x.get("price") is not None, x.get("price") or -1),
+        "distance_asc": lambda x: (x.get("distance_km") is None, -(x.get("distance_km") or 0)),
+        "newest": lambda x: (x.get("first_seen_at") is not None, x.get("first_seen_at")),
+    }
+    reverse = sort in {"score_desc", "price_desc", "newest"}
+    filtered.sort(key=sorters.get(sort, sorters["score_desc"]), reverse=reverse)
+
     total = len(filtered)
     pages = max(1, ceil(total / per_page))
     page = min(page, pages)
@@ -169,6 +216,9 @@ def archive(request: Request, source: str = Query("all"), state: str = Query("al
     return templates.TemplateResponse("archive.html", {
         "request": request, "items": visible, "total": total, "page": page, "pages": pages,
         "per_page": per_page, "source": source, "state": state, "status": status, "sources": sources,
+        "postal_code": postal_code, "max_distance_km": max_distance_km,
+        "min_price": min_price, "max_price": max_price, "min_score": min_score,
+        "verdict": verdict, "sort": sort,
     })
 
 
