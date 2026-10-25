@@ -7,11 +7,13 @@
   <p>Beschreibe dein Wunsch-Wohnmobil in deinen eigenen Worten oder passe die erkannten Kriterien darunter an.</p>
 </section>
 
-{% if imported or existing or invalid %}
+{% if imported or existing or invalid or extracted or awaiting %}
 <section class="import-summary">
   <strong>Import abgeschlossen</strong>
   <span>{{ imported }} neu</span>
   <span>{{ existing }} bereits vorhanden</span>
+  {% if extracted %}<span>{{ extracted }} automatisch ausgelesen</span>{% endif %}
+  {% if awaiting %}<span>{{ awaiting }} warten auf Details/API</span>{% endif %}
   {% if invalid %}<span>{{ invalid }} nicht erkannt</span>{% endif %}
 </section>
 {% endif %}
@@ -51,7 +53,7 @@
 
 <section class="panel manual-panel" id="batch-import">
   <div class="panel-head"><div><p class="eyebrow">SCHNELLIMPORT</p><h2>Mehrere Inserate gleichzeitig hinzufügen</h2></div></div>
-  <p class="muted">Füge beliebig viele Links untereinander ein oder lade eine TXT-Datei hoch. Womo AI erkennt Kleinanzeigen, mobile.de, AutoScout24, Caraworld und andere Quellen automatisch. Bereits bekannte Links werden nicht doppelt angelegt.</p>
+  <p class="muted">Füge beliebig viele Links untereinander ein oder lade eine TXT-Datei hoch. Womo AI archiviert jeden Link, erkennt die Quelle und versucht bei frei abrufbaren Seiten öffentliche Metadaten automatisch zu übernehmen.</p>
   <form method="post" action="/listings/batch" enctype="multipart/form-data" class="batch-form">
     <label>Links einfügen
       <textarea name="urls_text" rows="8" placeholder="https://www.kleinanzeigen.de/s-anzeige/...&#10;https://suchen.mobile.de/fahrzeuge/details.html?...&#10;https://www.autoscout24.de/angebote/..."></textarea>
@@ -60,27 +62,27 @@
       <label>Oder TXT-Datei hochladen
         <input type="file" name="file" accept=".txt,text/plain">
       </label>
-      <small>Eine URL pro Zeile ist ideal. Gemischter Text funktioniert ebenfalls, solange die Links vollständig enthalten sind.</small>
+      <small>Eine URL pro Zeile ist ideal. Bereits vorhandene Links werden nicht dupliziert.</small>
     </div>
-    <button class="primary" type="submit">Links ins Archiv importieren</button>
+    <button class="primary" type="submit">Links importieren & verarbeiten</button>
   </form>
 </section>
 
 <section class="panel manual-panel">
   <div class="panel-head"><div><p class="eyebrow">EINZELIMPORT</p><h2>Inserat mit Details hinzufügen</h2></div></div>
-  <p class="muted">Wenn du Preis, Titel oder Beschreibung schon kennst, kannst du sie direkt mit abspeichern.</p>
+  <p class="muted">Bei Portalen ohne freigegebene API kannst du bekannte Daten direkt mit abspeichern. Der Original-Link bleibt dauerhaft archiviert.</p>
   <form method="post" action="/listings/manual" class="manual-form">
     <input type="url" name="url" required placeholder="https://www.kleinanzeigen.de/s-anzeige/…">
     <input type="text" name="title" placeholder="Titel (optional)">
     <input type="number" name="price" placeholder="Preis € (optional)">
-    <textarea name="description" rows="3" placeholder="Beschreibung einfügen (optional, später KI-Analyse)"></textarea>
+    <textarea name="description" rows="3" placeholder="Beschreibung einfügen (optional)"></textarea>
     <button class="secondary" type="submit">Zum Archiv hinzufügen</button>
   </form>
 </section>
 
 <section class="feature-row">
   <article><strong>Dauerhaftes Archiv</strong><span>Aktive und verschwundene Inserate bleiben vergleichbar</span></article>
-  <article><strong>100-Punkte-Score</strong><span>Sicherheit, Technik, Preis & Risiko</span></article>
+  <article><strong>Import-Pipeline</strong><span>Quelle erkennen → Daten extrahieren → bewerten</span></article>
   <article><strong>API-Suche</strong><span>mobile.de vorbereitet · AutoScout24 nach Freischaltung</span></article>
 </section>
 {% endblock %}
