@@ -6,12 +6,11 @@ from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .collectors.autoscout24 import AutoScout24Collector
 from .collectors.mobile_de import MobileDeCollector
-from .data import LISTINGS
 from .database import Base, engine, get_db
 from .importer import process_listing
 from .models import Listing
@@ -19,7 +18,7 @@ from .repository import upsert_listing
 from .scoring import SearchCriteria, matches_hard_filters, score_listing
 from .search_intent import criteria_from_prompt
 
-app = FastAPI(title="Womo AI", version="0.4.0")
+app = FastAPI(title="Womo AI", version="0.5.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 Base.metadata.create_all(bind=engine)
@@ -59,17 +58,13 @@ def listing_dict(row: Listing) -> dict:
     }
 
 
-def seed_once(db: Session):
-    if (db.scalar(select(func.count()).select_from(Listing)) or 0) > 0:
+def cleanup_test_data(db: Session) -> None:
+    rows = db.scalars(select(Listing).where(Listing.url.like("seed://%"))).all()
+    if not rows:
         return
-    for item in LISTINGS:
-        data = dict(item)
-        data["url"] = f"seed://{item['id']}"
-        data["source_id"] = f"seed-{item['id']}"
-        score, reasons = score_listing(data, SearchCriteria())
-        data["score"] = score
-        data["score_explanation"] = ", ".join(reasons)
-        upsert_listing(db, data)
+    for row in rows:
+        db.delete(row)
+    db.commit()
 
 
 def detect_source(url: str) -> str:
@@ -142,7 +137,7 @@ def home(
     awaiting: int = Query(0),
     db: Session = Depends(get_db),
 ):
-    seed_once(db)
+    cleanup_test_data(db)
     return templates.TemplateResponse("index.html", {
         "request": request,
         "defaults": SearchCriteria(),
@@ -151,6 +146,49 @@ def home(
         "invalid": invalid,
         "extracted": extracted,
         "awaiting": awaiting,
+    })
+
+
+@app.get("/archive", response_class=HTMLResponse)
+def archive(
+    request: Request,
+    source: str = Query("all"),
+    state: str = Query("all"),
+    status: str = Query("all"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=10, le=100),
+    db: Session = Depends(get_db),
+):
+    cleanup_test_data(db)
+    rows = db.scalars(select(Listing).order_by(Listing.first_seen_at.desc())).all()
+    filtered = []
+    for row in rows:
+        item = listing_dict(row)
+        if source != "all" and item["source"] != source:
+            continue
+        if state != "all" and item["import_state"] != state:
+            continue
+        if status != "all" and item["status"] != status:
+            continue
+        filtered.append(item)
+
+    total = len(filtered)
+    pages = max(1, ceil(total / per_page))
+    page = min(page, pages)
+    visible = filtered[(page - 1) * per_page: page * per_page]
+    sources = sorted({row.source for row in rows if row.source})
+
+    return templates.TemplateResponse("archive.html", {
+        "request": request,
+        "items": visible,
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "per_page": per_page,
+        "source": source,
+        "state": state,
+        "status": status,
+        "sources": sources,
     })
 
 
@@ -165,7 +203,7 @@ def search_get(
     status: str = Query("all"),
     db: Session = Depends(get_db),
 ):
-    seed_once(db)
+    cleanup_test_data(db)
     criteria = criteria_from_prompt(prompt, SearchCriteria())
     return render_results(request, db, criteria, prompt, sort, direction, page, per_page, status)
 
@@ -186,7 +224,7 @@ def search_post(
     per_page: int = Form(20),
     db: Session = Depends(get_db),
 ):
-    seed_once(db)
+    cleanup_test_data(db)
     criteria = SearchCriteria(
         max_price=max_price,
         max_distance_km=max_distance_km,
@@ -267,7 +305,7 @@ def add_manual_listing(
         "status": "active",
     })
     process_listing(db, listing)
-    return RedirectResponse(url="/search?sort=first_seen_at&direction=desc", status_code=303)
+    return RedirectResponse(url="/archive", status_code=303)
 
 
 @app.post("/listings/batch")
@@ -303,7 +341,7 @@ def reprocess_listing(listing_id: int, db: Session = Depends(get_db)):
     listing = db.get(Listing, listing_id)
     if listing:
         process_listing(db, listing)
-    return RedirectResponse(url="/search?sort=first_seen_at&direction=desc", status_code=303)
+    return RedirectResponse(url="/archive", status_code=303)
 
 
 @app.post("/sync/mobile")
@@ -337,4 +375,4 @@ def source_status():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.4.0"}
+    return {"status": "ok", "version": "0.5.0"}
