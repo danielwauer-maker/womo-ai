@@ -3,6 +3,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
+COPY scripts ./scripts
 RUN mkdir -p /data
 ENV DATA_DIR=/data
 VOLUME ["/data"]
