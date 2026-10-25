@@ -1,0 +1,40 @@
+<section class="panel search-panel decision-panel">
+  <div class="panel-head">
+    <div>
+      <p class="eyebrow">WOMO AI KAUFBEWERTUNG</p>
+      <h2>{{ item.assessment.verdict|upper }} · {{ item.assessment.score }}/100</h2>
+    </div>
+    <span class="import-state ready">Datenvertrauen {{ item.assessment.confidence }}%</span>
+  </div>
+
+  <p class="muted">Bewertet gegen dein Suchprofil. Unbekannte Angaben werden als Prüfpunkt behandelt und nicht automatisch als negativer Fahrzeugzustand gewertet.</p>
+
+  <div class="analysis-grid">
+    <div>
+      <h3>Stärken</h3>
+      {% if item.assessment.positives %}
+        {% for point in item.assessment.positives[:8] %}<p>✓ {{ point }}</p>{% endfor %}
+      {% else %}
+        <p class="muted">Noch keine belastbaren Pluspunkte erkannt.</p>
+      {% endif %}
+    </div>
+    <div>
+      <h3>Risiken</h3>
+      {% if item.assessment.blockers or item.assessment.risks %}
+        {% for point in item.assessment.blockers[:5] %}<p class="risk">! {{ point }}</p>{% endfor %}
+        {% for point in item.assessment.risks[:5] %}<p class="risk">! {{ point }}</p>{% endfor %}
+      {% else %}
+        <p>✓ Keine harten Ausschlussgründe aus den erfassten Daten.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if item.assessment.unknowns %}
+    <div>
+      <h3>Vor Besichtigung klären</h3>
+      <div class="facts">
+        {% for point in item.assessment.unknowns[:8] %}<span>{{ point }}</span>{% endfor %}
+      </div>
+    </div>
+  {% endif %}
+</section>
