@@ -14,6 +14,8 @@
 <section class="import-summary">
   <strong>One-Tap Capture erfolgreich ✓</strong>
   <span>{{ item.images|length }} Bildreferenzen</span>
+  {% if item.reported_image_count %}<span>Portal: {{ item.reported_image_count }} Bilder</span>{% endif %}
+  {% if item.missing_image_count %}<span>{{ item.missing_image_count }} Bilder fehlen</span>{% endif %}
   <span>Score {{ item.score }}/100</span>
   <span>{{ item.capture_count }} Capture{% if item.capture_count != 1 %}s{% endif %}</span>
 </section>
@@ -53,6 +55,25 @@
   {% endif %}
 </section>
 
+{% if item.portal_listing_id or item.listed_at_text or item.seller_active_since or item.seller_ads_online is not none or item.seller_badges or item.views is not none or item.watchers is not none or item.dealer_name %}
+<section class="panel manual-panel">
+  <div class="panel-head"><div><p class="eyebrow">PORTAL-SIGNALE</p><h2>Interesse & Vertrauensdaten</h2></div></div>
+  <p class="muted">Nur Werte, die beim Capture tatsächlich auf der geöffneten Portalseite sichtbar waren. Fehlende Werte werden nicht geschätzt.</p>
+  <div class="facts">
+    {% if item.portal_listing_id %}<span>ID: <strong>{{ item.portal_listing_id }}</strong></span>{% endif %}
+    {% if item.listed_at_text %}<span>Online seit: <strong>{{ item.listed_at_text }}</strong></span>{% endif %}
+    {% if item.seller_type %}<span>{{ item.seller_type }}</span>{% endif %}
+    {% if item.seller_active_since %}<span>Verkäufer aktiv seit: <strong>{{ item.seller_active_since }}</strong></span>{% endif %}
+    {% if item.seller_ads_online is not none %}<span>Anzeigen online: <strong>{{ item.seller_ads_online }}</strong></span>{% endif %}
+    {% if item.seller_ads_total is not none %}<span>Anzeigen gesamt: <strong>{{ item.seller_ads_total }}</strong></span>{% endif %}
+    {% if item.views is not none %}<span>Aufrufe: <strong>{{ item.views }}</strong></span>{% endif %}
+    {% if item.watchers is not none %}<span>Beobachter: <strong>{{ item.watchers }}</strong></span>{% endif %}
+    {% if item.dealer_name %}<span>Händler: <strong>{{ item.dealer_name }}</strong></span>{% endif %}
+  </div>
+  {% if item.seller_badges %}<p><strong>Verkäufer-Badges:</strong> {{ item.seller_badges }}</p>{% endif %}
+</section>
+{% endif %}
+
 <section class="panel manual-panel">
   <div class="panel-head">
     <div>
@@ -67,27 +88,19 @@
     <label class="full-span prompt-field">Inseratstext / Beschreibung
       <textarea name="raw_text" rows="12" placeholder="Nur falls etwas fehlt oder korrigiert werden muss ...">{{ item.description or '' }}</textarea>
     </label>
-
-    <label class="full-span">Titel
-      <input type="text" name="title" value="{{ item.title or '' }}">
-    </label>
-
+    <label class="full-span">Titel<input type="text" name="title" value="{{ item.title or '' }}"></label>
     <label>Preis (€)<input type="number" name="price" value="{{ item.price or '' }}"></label>
     <label>Baujahr<input type="number" name="year" value="{{ item.year or '' }}"></label>
     <label>Kilometer<input type="number" name="mileage" value="{{ item.mileage or '' }}"></label>
-
     <label>Standort<input type="text" name="location" value="{{ item.location or '' }}"></label>
     <label>Basisfahrzeug Hersteller<input type="text" name="base_make" value="{{ item.base_make or '' }}" placeholder="z. B. Fiat"></label>
     <label>Basisfahrzeug Modell<input type="text" name="base_model" value="{{ item.base_model or '' }}" placeholder="z. B. Ducato"></label>
-
     <label>Aufbauhersteller<input type="text" name="coachbuilder" value="{{ item.coachbuilder or '' }}" placeholder="z. B. LMC"></label>
     <label>Aufbaumodell<input type="text" name="coach_model" value="{{ item.coach_model or '' }}" placeholder="z. B. Liberty 6400"></label>
     <label>Aufbauart<input type="text" name="body_type" value="{{ item.body_type or '' }}" placeholder="z. B. Alkoven"></label>
-
     <label>Motor<input type="text" name="engine" value="{{ item.engine_text or item.engine or '' }}" placeholder="z. B. 2.5 Turbo Diesel"></label>
     <label>Leistung (kW)<input type="number" name="power_kw" value="{{ item.power_kw or '' }}"></label>
     <label>Sitzplätze<input type="number" name="seats" value="{{ item.seats or '' }}"></label>
-
     <label>Gesamtgewicht (kg)<input type="number" name="weight_kg" value="{{ item.weight_kg or '' }}"></label>
     <label>3-Punkt-Gurt
       <select name="three_point_belt">
@@ -103,7 +116,6 @@
         <option value="measured_dry" {% if item.dry_status=='measured_dry' %}selected{% endif %}>gemessen trocken</option>
       </select>
     </label>
-
     <label>Reparaturbedarf
       <select name="repair_level">
         <option value="unknown" {% if item.repair_level=='unknown' %}selected{% endif %}>unklar</option>
@@ -112,7 +124,6 @@
         <option value="heavy" {% if item.repair_level=='heavy' %}selected{% endif %}>hoch</option>
       </select>
     </label>
-
     <div></div><div></div>
     <button class="primary" type="submit">Korrekturen speichern & neu bewerten →</button>
   </form>
@@ -120,7 +131,8 @@
 
 {% if item.images %}
 <section class="panel manual-panel">
-  <div class="panel-head"><div><p class="eyebrow">BILDER</p><h2>{{ item.images|length }} automatisch übernommene Bildreferenzen</h2></div></div>
+  <div class="panel-head"><div><p class="eyebrow">BILDER</p><h2>{{ item.images|length }} automatisch übernommene Bildreferenzen{% if item.reported_image_count %} / {{ item.reported_image_count }} gemeldet{% endif %}</h2></div></div>
+  {% if item.missing_image_count %}<p class="import-message">Noch {{ item.missing_image_count }} vom Portal gemeldete Bilder fehlen im Capture.</p>{% endif %}
   <div class="detail-gallery">
     {% for image in item.images %}<img src="{{ image }}" alt="Inseratsbild" loading="lazy">{% endfor %}
   </div>
@@ -130,9 +142,7 @@
 {% if item.prices %}
 <section class="panel manual-panel">
   <div class="panel-head"><div><p class="eyebrow">PREISVERLAUF</p><h2>Historie</h2></div></div>
-  <div class="facts">
-    {% for p in item.prices[:12] %}<span>{{ p.observed_at.strftime('%d.%m.%Y') }} · <strong>{{ "{:,}".format(p.price).replace(",", ".") }} €</strong></span>{% endfor %}
-  </div>
+  <div class="facts">{% for p in item.prices[:12] %}<span>{{ p.observed_at.strftime('%d.%m.%Y') }} · <strong>{{ "{:,}".format(p.price).replace(",", ".") }} €</strong></span>{% endfor %}</div>
 </section>
 {% endif %}
 {% endblock %}
