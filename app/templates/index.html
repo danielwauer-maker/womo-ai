@@ -4,15 +4,18 @@
 <section class="hero">
   <p class="eyebrow">DEIN KI-WOHNMOBILFINDER</p>
   <h1>Finde nicht irgendein Wohnmobil.<br><span>Finde das richtige.</span></h1>
-  <p>Definiere deine Muss-Kriterien. Womo AI priorisiert Angebote nach Sicherheit, Technik, Preis und Familientauglichkeit.</p>
+  <p>Beschreibe dein Wunsch-Wohnmobil in deinen eigenen Worten oder passe die erkannten Kriterien darunter an.</p>
 </section>
 
 <section class="panel search-panel">
   <div class="panel-head">
-    <div><p class="eyebrow">SUCHPROFIL</p><h2>Unser optimales Wohnmobil</h2></div>
+    <div><p class="eyebrow">KI-SUCHPROFIL</p><h2>Was suchst du?</h2></div>
     <span class="status-dot">● aktiv</span>
   </div>
   <form method="post" action="/search" class="form-grid">
+    <label class="full-span">Wunschbeschreibung
+      <textarea name="prompt" rows="4" placeholder="z. B. Wir sind 2 Erwachsene und 1 Kind. Maximal 11.000 €, Alkoven, 3-Punkt-Gurt hinten, möglichst 2.5 TD, unter 3,5 t. Kleinere Reparaturen sind okay."></textarea>
+    </label>
     <label>Max. Preis (€)<input type="number" name="max_price" value="{{ defaults.max_price }}" min="1000" step="500"></label>
     <label>Max. Entfernung (km)<input type="number" name="max_distance_km" value="{{ defaults.max_distance_km }}" min="10" step="10"></label>
     <label>Min. Baujahr<input type="number" name="min_year" value="{{ defaults.min_year }}" min="1970" max="2030"></label>
@@ -26,17 +29,32 @@
         <option value="heavy">auch größeres Projekt</option>
       </select>
     </label>
+    <label>Treffer pro Seite
+      <select name="per_page"><option>5</option><option>10</option><option selected>20</option><option>50</option></select>
+    </label>
     <div class="checks">
       <label class="check"><input type="checkbox" name="require_alkoven" checked> Alkoven erforderlich</label>
-      <label class="check"><input type="checkbox" name="require_three_point_belt" checked> 3-Punkt-Gurt hinten stark priorisieren</label>
+      <label class="check"><input type="checkbox" name="require_three_point_belt" checked> 3-Punkt-Gurt hinten priorisieren</label>
     </div>
     <button class="primary" type="submit">Angebote bewerten →</button>
   </form>
 </section>
 
+<section class="panel manual-panel">
+  <div class="panel-head"><div><p class="eyebrow">MANUELLER IMPORT</p><h2>Inserat hinzufügen</h2></div></div>
+  <p class="muted">Für Kleinanzeigen und andere Quellen kannst du eine URL dauerhaft in dein Archiv aufnehmen. Beschreibung und Preis kannst du direkt mitgeben.</p>
+  <form method="post" action="/listings/manual" class="manual-form">
+    <input type="url" name="url" required placeholder="https://www.kleinanzeigen.de/s-anzeige/…">
+    <input type="text" name="title" placeholder="Titel (optional)">
+    <input type="number" name="price" placeholder="Preis € (optional)">
+    <textarea name="description" rows="3" placeholder="Beschreibung einfügen (optional, später KI-Analyse)"></textarea>
+    <button class="secondary" type="submit">Zum Archiv hinzufügen</button>
+  </form>
+</section>
+
 <section class="feature-row">
-  <article><strong>100-Punkte-Score</strong><span>Technik, Sicherheit, Preis & Risiko</span></article>
-  <article><strong>KI-Kaufanalyse</strong><span>Stärken, Risiken und offene Fragen</span></article>
-  <article><strong>Marktüberwachung</strong><span>Collector & Alerts folgen in V0.2</span></article>
+  <article><strong>Dauerhaftes Archiv</strong><span>Aktive und verschwundene Inserate bleiben vergleichbar</span></article>
+  <article><strong>100-Punkte-Score</strong><span>Sicherheit, Technik, Preis & Risiko</span></article>
+  <article><strong>API-Suche</strong><span>mobile.de vorbereitet · AutoScout24 nach Freischaltung</span></article>
 </section>
 {% endblock %}
