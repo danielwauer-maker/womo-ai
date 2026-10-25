@@ -12,14 +12,16 @@ from sqlalchemy.orm import Session
 from .collectors.autoscout24 import AutoScout24Collector
 from .collectors.mobile_de import MobileDeCollector
 from .database import Base, engine, get_db
+from .detail_routes import router as detail_router
 from .importer import process_listing
 from .models import Listing
 from .repository import upsert_listing
 from .scoring import SearchCriteria, matches_hard_filters, score_listing
 from .search_intent import criteria_from_prompt
 
-app = FastAPI(title="Womo AI", version="0.6.0")
+app = FastAPI(title="Womo AI", version="0.7.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.include_router(detail_router)
 templates = Jinja2Templates(directory="app/templates")
 Base.metadata.create_all(bind=engine)
 
@@ -28,31 +30,15 @@ URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 
 def listing_dict(row: Listing) -> dict:
     return {
-        "id": row.id,
-        "source": row.source,
-        "source_id": row.source_id,
-        "url": row.url,
-        "title": row.title,
-        "description": row.description,
-        "price": row.price,
-        "year": row.year,
-        "mileage": row.mileage,
-        "distance_km": row.distance_km,
-        "location": row.location,
-        "make": row.make,
-        "model": row.model,
-        "body_type": row.body_type,
-        "engine": row.engine,
-        "power_kw": row.power_kw,
-        "seats": row.seats,
-        "weight_kg": row.weight_kg,
-        "three_point_belt": row.three_point_belt,
-        "dry_status": row.dry_status,
-        "repair_level": row.repair_level,
-        "status": row.status,
+        "id": row.id, "source": row.source, "source_id": row.source_id, "url": row.url,
+        "title": row.title, "description": row.description, "price": row.price, "year": row.year,
+        "mileage": row.mileage, "distance_km": row.distance_km, "location": row.location,
+        "make": row.make, "model": row.model, "body_type": row.body_type, "engine": row.engine,
+        "power_kw": row.power_kw, "seats": row.seats, "weight_kg": row.weight_kg,
+        "three_point_belt": row.three_point_belt, "dry_status": row.dry_status,
+        "repair_level": row.repair_level, "status": row.status,
         "images": [img.remote_url for img in row.images],
-        "first_seen_at": row.first_seen_at,
-        "last_seen_at": row.last_seen_at,
+        "first_seen_at": row.first_seen_at, "last_seen_at": row.last_seen_at,
         "import_state": row.import_state.state if row.import_state else "ready",
         "import_message": row.import_state.message if row.import_state else "",
     }
@@ -60,11 +46,10 @@ def listing_dict(row: Listing) -> dict:
 
 def cleanup_test_data(db: Session) -> None:
     rows = db.scalars(select(Listing).where(Listing.url.like("seed://%"))).all()
-    if not rows:
-        return
-    for row in rows:
-        db.delete(row)
-    db.commit()
+    if rows:
+        for row in rows:
+            db.delete(row)
+        db.commit()
 
 
 def detect_source(url: str) -> str:
@@ -83,14 +68,11 @@ def detect_source(url: str) -> str:
 def normalize_url(url: str) -> str:
     url = url.strip().rstrip(".,;)")
     parsed = urlparse(url)
-    if not parsed.scheme or not parsed.netloc:
-        return ""
-    return url
+    return url if parsed.scheme and parsed.netloc else ""
 
 
 def extract_urls(text: str) -> list[str]:
-    seen = set()
-    urls = []
+    seen, urls = set(), []
     for match in URL_RE.findall(text or ""):
         url = normalize_url(match)
         if url and url not in seen:
@@ -100,23 +82,16 @@ def extract_urls(text: str) -> list[str]:
 
 
 def import_urls(db: Session, urls: list[str]) -> tuple[int, int, int, int]:
-    created = 0
-    existing = 0
-    extracted = 0
-    awaiting = 0
+    created = existing = extracted = awaiting = 0
     for url in urls:
         found = db.scalar(select(Listing).where(Listing.url == url))
         if found:
             existing += 1
             listing = upsert_listing(db, {"source": found.source, "url": url, "status": "active"})
         else:
-            source = detect_source(url)
             listing = upsert_listing(db, {
-                "source": source,
-                "url": url,
-                "title": "Noch nicht analysiert",
-                "description": "",
-                "status": "active",
+                "source": detect_source(url), "url": url, "title": "Noch nicht analysiert",
+                "description": "", "status": "active",
             })
             created += 1
         state = process_listing(db, listing)
@@ -128,55 +103,30 @@ def import_urls(db: Session, urls: list[str]) -> tuple[int, int, int, int]:
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(
-    request: Request,
-    imported: int = Query(0),
-    existing: int = Query(0),
-    invalid: int = Query(0),
-    extracted: int = Query(0),
-    awaiting: int = Query(0),
-    db: Session = Depends(get_db),
-):
+def home(request: Request, imported: int = Query(0), existing: int = Query(0), invalid: int = Query(0),
+         extracted: int = Query(0), awaiting: int = Query(0), db: Session = Depends(get_db)):
     cleanup_test_data(db)
     return templates.TemplateResponse("index.html", {
-        "request": request,
-        "defaults": SearchCriteria(),
-        "imported": imported,
-        "existing": existing,
-        "invalid": invalid,
-        "extracted": extracted,
-        "awaiting": awaiting,
+        "request": request, "defaults": SearchCriteria(), "imported": imported,
+        "existing": existing, "invalid": invalid, "extracted": extracted, "awaiting": awaiting,
     })
 
 
 @app.get("/share", response_class=HTMLResponse)
-def share_receiver(
-    request: Request,
-    title: str = Query(""),
-    text: str = Query(""),
-    url: str = Query(""),
-    db: Session = Depends(get_db),
-):
+def share_receiver(request: Request, title: str = Query(""), text: str = Query(""), url: str = Query(""),
+                   db: Session = Depends(get_db)):
     cleanup_test_data(db)
     candidates = extract_urls("\n".join([url, text]))
     shared_url = candidates[0] if candidates else ""
     existing = db.scalar(select(Listing).where(Listing.url == shared_url)) if shared_url else None
     return templates.TemplateResponse("share.html", {
-        "request": request,
-        "shared_url": shared_url,
-        "shared_title": title.strip(),
-        "shared_text": text.strip(),
-        "existing": listing_dict(existing) if existing else None,
+        "request": request, "shared_url": shared_url, "shared_title": title.strip(),
+        "shared_text": text.strip(), "existing": listing_dict(existing) if existing else None,
     })
 
 
 @app.post("/share/import")
-def share_import(
-    url: str = Form(...),
-    title: str = Form(""),
-    text: str = Form(""),
-    db: Session = Depends(get_db),
-):
+def share_import(url: str = Form(...), title: str = Form(""), text: str = Form(""), db: Session = Depends(get_db)):
     clean_url = normalize_url(url)
     if not clean_url:
         return RedirectResponse(url="/share", status_code=303)
@@ -185,26 +135,16 @@ def share_import(
         listing = upsert_listing(db, {"source": found.source, "url": clean_url, "status": "active"})
     else:
         listing = upsert_listing(db, {
-            "source": detect_source(clean_url),
-            "url": clean_url,
-            "title": title.strip() or "Noch nicht analysiert",
-            "description": text.strip(),
-            "status": "active",
+            "source": detect_source(clean_url), "url": clean_url,
+            "title": title.strip() or "Noch nicht analysiert", "description": text.strip(), "status": "active",
         })
     process_listing(db, listing)
-    return RedirectResponse(url=f"/archive?shared={listing.id}", status_code=303)
+    return RedirectResponse(url=f"/listings/{listing.id}", status_code=303)
 
 
 @app.get("/archive", response_class=HTMLResponse)
-def archive(
-    request: Request,
-    source: str = Query("all"),
-    state: str = Query("all"),
-    status: str = Query("all"),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=10, le=100),
-    db: Session = Depends(get_db),
-):
+def archive(request: Request, source: str = Query("all"), state: str = Query("all"), status: str = Query("all"),
+            page: int = Query(1, ge=1), per_page: int = Query(50, ge=10, le=100), db: Session = Depends(get_db)):
     cleanup_test_data(db)
     rows = db.scalars(select(Listing).order_by(Listing.first_seen_at.desc())).all()
     filtered = []
@@ -217,151 +157,83 @@ def archive(
         if status != "all" and item["status"] != status:
             continue
         filtered.append(item)
-
     total = len(filtered)
     pages = max(1, ceil(total / per_page))
     page = min(page, pages)
-    visible = filtered[(page - 1) * per_page: page * per_page]
+    visible = filtered[(page - 1) * per_page:page * per_page]
     sources = sorted({row.source for row in rows if row.source})
-
     return templates.TemplateResponse("archive.html", {
-        "request": request,
-        "items": visible,
-        "total": total,
-        "page": page,
-        "pages": pages,
-        "per_page": per_page,
-        "source": source,
-        "state": state,
-        "status": status,
-        "sources": sources,
+        "request": request, "items": visible, "total": total, "page": page, "pages": pages,
+        "per_page": per_page, "source": source, "state": state, "status": status, "sources": sources,
     })
 
 
 @app.get("/search", response_class=HTMLResponse)
-def search_get(
-    request: Request,
-    prompt: str = Query(""),
-    sort: str = Query("score"),
-    direction: str = Query("desc"),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=5, le=100),
-    status: str = Query("all"),
-    db: Session = Depends(get_db),
-):
+def search_get(request: Request, prompt: str = Query(""), sort: str = Query("score"), direction: str = Query("desc"),
+               page: int = Query(1, ge=1), per_page: int = Query(20, ge=5, le=100), status: str = Query("all"),
+               db: Session = Depends(get_db)):
     cleanup_test_data(db)
-    criteria = criteria_from_prompt(prompt, SearchCriteria())
-    return render_results(request, db, criteria, prompt, sort, direction, page, per_page, status)
+    return render_results(request, db, criteria_from_prompt(prompt, SearchCriteria()), prompt, sort, direction, page, per_page, status)
 
 
 @app.post("/search", response_class=HTMLResponse)
-def search_post(
-    request: Request,
-    prompt: str = Form(""),
-    max_price: int = Form(11000),
-    max_distance_km: int = Form(300),
-    min_year: int = Form(1988),
-    max_mileage: int = Form(260000),
-    require_three_point_belt: bool = Form(False),
-    max_weight_kg: int = Form(3500),
-    repair_tolerance: str = Form("medium"),
-    preferred_engine: str = Form("2.5 TD"),
-    require_alkoven: bool = Form(False),
-    per_page: int = Form(20),
-    db: Session = Depends(get_db),
-):
+def search_post(request: Request, prompt: str = Form(""), max_price: int = Form(11000),
+                max_distance_km: int = Form(300), min_year: int = Form(1988), max_mileage: int = Form(260000),
+                require_three_point_belt: bool = Form(False), max_weight_kg: int = Form(3500),
+                repair_tolerance: str = Form("medium"), preferred_engine: str = Form("2.5 TD"),
+                require_alkoven: bool = Form(False), per_page: int = Form(20), db: Session = Depends(get_db)):
     cleanup_test_data(db)
-    criteria = SearchCriteria(
-        max_price=max_price,
-        max_distance_km=max_distance_km,
-        min_year=min_year,
-        max_mileage=max_mileage,
-        require_three_point_belt=require_three_point_belt,
-        max_weight_kg=max_weight_kg,
-        repair_tolerance=repair_tolerance,
-        preferred_engine=preferred_engine.strip(),
-        require_alkoven=require_alkoven,
-    )
+    criteria = SearchCriteria(max_price=max_price, max_distance_km=max_distance_km, min_year=min_year,
+                              max_mileage=max_mileage, require_three_point_belt=require_three_point_belt,
+                              max_weight_kg=max_weight_kg, repair_tolerance=repair_tolerance,
+                              preferred_engine=preferred_engine.strip(), require_alkoven=require_alkoven)
     if prompt.strip():
         criteria = criteria_from_prompt(prompt, criteria)
     return render_results(request, db, criteria, prompt, "score", "desc", 1, per_page, "all")
 
 
 def render_results(request, db, criteria, prompt, sort, direction, page, per_page, status):
-    rows = db.scalars(select(Listing)).all()
     results = []
-    for row in rows:
+    for row in db.scalars(select(Listing)).all():
         item = listing_dict(row)
         if status != "all" and item["status"] != status:
             continue
         if not matches_hard_filters(item, criteria):
             continue
         score, reasons = score_listing(item, criteria)
-        item["score"] = score
-        item["score_reasons"] = reasons
+        item["score"], item["score_reasons"] = score, reasons
         results.append(item)
-
     allowed_sort = {"score", "price", "distance_km", "year", "mileage", "first_seen_at", "last_seen_at"}
     sort = sort if sort in allowed_sort else "score"
     reverse = direction != "asc"
-
     def sort_key(item):
         value = item.get(sort)
-        if value is None:
-            return float("-inf") if reverse else float("inf")
-        return value
-
+        return (float("-inf") if reverse else float("inf")) if value is None else value
     results.sort(key=sort_key, reverse=reverse)
     total = len(results)
     pages = max(1, ceil(total / per_page))
     page = min(page, pages)
-    start = (page - 1) * per_page
-    visible = results[start:start + per_page]
-
+    visible = results[(page - 1) * per_page:page * per_page]
     return templates.TemplateResponse("results.html", {
-        "request": request,
-        "criteria": criteria,
-        "prompt": prompt,
-        "results": visible,
-        "total": total,
-        "page": page,
-        "pages": pages,
-        "per_page": per_page,
-        "sort": sort,
-        "direction": direction,
-        "status": status,
+        "request": request, "criteria": criteria, "prompt": prompt, "results": visible, "total": total,
+        "page": page, "pages": pages, "per_page": per_page, "sort": sort, "direction": direction, "status": status,
     })
 
 
 @app.post("/listings/manual")
-def add_manual_listing(
-    url: str = Form(...),
-    title: str = Form("Noch nicht analysiert"),
-    description: str = Form(""),
-    price: int | None = Form(None),
-    db: Session = Depends(get_db),
-):
-    source = detect_source(url)
+def add_manual_listing(url: str = Form(...), title: str = Form("Noch nicht analysiert"),
+                       description: str = Form(""), price: int | None = Form(None), db: Session = Depends(get_db)):
     listing = upsert_listing(db, {
-        "source": source,
-        "url": normalize_url(url),
-        "title": title.strip() or "Noch nicht analysiert",
-        "description": description.strip(),
-        "price": price,
-        "status": "active",
+        "source": detect_source(url), "url": normalize_url(url), "title": title.strip() or "Noch nicht analysiert",
+        "description": description.strip(), "price": price, "status": "active",
     })
     process_listing(db, listing)
-    return RedirectResponse(url="/archive", status_code=303)
+    return RedirectResponse(url=f"/listings/{listing.id}", status_code=303)
 
 
 @app.post("/listings/batch")
-async def add_batch_listings(
-    urls_text: str = Form(""),
-    file: UploadFile | None = File(None),
-    db: Session = Depends(get_db),
-):
-    combined = urls_text or ""
-    invalid = 0
+async def add_batch_listings(urls_text: str = Form(""), file: UploadFile | None = File(None), db: Session = Depends(get_db)):
+    combined, invalid = urls_text or "", 0
     if file and file.filename:
         raw = await file.read()
         try:
@@ -371,15 +243,11 @@ async def add_batch_listings(
                 combined += "\n" + raw.decode("latin-1")
             except UnicodeDecodeError:
                 invalid += 1
-
     urls = extract_urls(combined)
     raw_candidates = [line.strip() for line in combined.splitlines() if line.strip()]
     invalid += max(0, len(raw_candidates) - len(urls))
     created, existing, extracted, awaiting = import_urls(db, urls)
-    return RedirectResponse(
-        url=f"/?imported={created}&existing={existing}&invalid={invalid}&extracted={extracted}&awaiting={awaiting}#batch-import",
-        status_code=303,
-    )
+    return RedirectResponse(url=f"/?imported={created}&existing={existing}&invalid={invalid}&extracted={extracted}&awaiting={awaiting}#batch-import", status_code=303)
 
 
 @app.post("/listings/{listing_id}/reprocess")
@@ -387,7 +255,7 @@ def reprocess_listing(listing_id: int, db: Session = Depends(get_db)):
     listing = db.get(Listing, listing_id)
     if listing:
         process_listing(db, listing)
-    return RedirectResponse(url="/archive", status_code=303)
+    return RedirectResponse(url=f"/listings/{listing_id}", status_code=303)
 
 
 @app.post("/sync/mobile")
@@ -404,8 +272,7 @@ def sync_mobile(db: Session = Depends(get_db)):
             except Exception:
                 pass
         score, reasons = score_listing(detail, criteria)
-        detail["score"] = score
-        detail["score_explanation"] = ", ".join(reasons)
+        detail["score"], detail["score_explanation"] = score, ", ".join(reasons)
         upsert_listing(db, detail)
     return RedirectResponse(url="/search?sort=score&direction=desc", status_code=303)
 
@@ -421,4 +288,4 @@ def source_status():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.6.0"}
+    return {"status": "ok", "version": "0.7.0"}
