@@ -23,8 +23,14 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
     lower = raw.lower()
     result: dict = {}
 
-    # Price: prefer values explicitly followed by EUR / €.
-    prices = re.findall(r"(?<!\d)(\d{1,3}(?:[\.\s]\d{3})+|\d{4,6})\s*(?:€|eur)\b?", raw, re.I)
+    # Price: prefer values explicitly followed by EUR / €. The trailing lookahead
+    # accepts whitespace, punctuation or the end of the text without using an
+    # invalid optional word-boundary construct such as ``\b?``.
+    prices = re.findall(
+        r"(?<!\d)(\d{1,3}(?:[\.\s]\d{3})+|\d{4,6})\s*(?:€|eur)(?=\s|$|[.,;:!?])",
+        raw,
+        re.I,
+    )
     if prices:
         result["price"] = _number(prices[0])
 
