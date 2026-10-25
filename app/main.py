@@ -13,12 +13,13 @@ from .collectors.autoscout24 import AutoScout24Collector
 from .collectors.mobile_de import MobileDeCollector
 from .data import LISTINGS
 from .database import Base, engine, get_db
+from .importer import process_listing
 from .models import Listing
 from .repository import upsert_listing
 from .scoring import SearchCriteria, matches_hard_filters, score_listing
 from .search_intent import criteria_from_prompt
 
-app = FastAPI(title="Womo AI", version="0.3.0")
+app = FastAPI(title="Womo AI", version="0.4.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 Base.metadata.create_all(bind=engine)
@@ -53,6 +54,8 @@ def listing_dict(row: Listing) -> dict:
         "images": [img.remote_url for img in row.images],
         "first_seen_at": row.first_seen_at,
         "last_seen_at": row.last_seen_at,
+        "import_state": row.import_state.state if row.import_state else "ready",
+        "import_message": row.import_state.message if row.import_state else "",
     }
 
 
@@ -101,25 +104,32 @@ def extract_urls(text: str) -> list[str]:
     return urls
 
 
-def import_urls(db: Session, urls: list[str]) -> tuple[int, int]:
+def import_urls(db: Session, urls: list[str]) -> tuple[int, int, int, int]:
     created = 0
     existing = 0
+    extracted = 0
+    awaiting = 0
     for url in urls:
         found = db.scalar(select(Listing).where(Listing.url == url))
         if found:
             existing += 1
-            upsert_listing(db, {"source": found.source, "url": url, "status": "active"})
-            continue
-        source = detect_source(url)
-        upsert_listing(db, {
-            "source": source,
-            "url": url,
-            "title": "Noch nicht analysiert",
-            "description": "",
-            "status": "active",
-        })
-        created += 1
-    return created, existing
+            listing = upsert_listing(db, {"source": found.source, "url": url, "status": "active"})
+        else:
+            source = detect_source(url)
+            listing = upsert_listing(db, {
+                "source": source,
+                "url": url,
+                "title": "Noch nicht analysiert",
+                "description": "",
+                "status": "active",
+            })
+            created += 1
+        state = process_listing(db, listing)
+        if state.state == "extracted":
+            extracted += 1
+        elif state.state in {"awaiting_details", "failed"}:
+            awaiting += 1
+    return created, existing, extracted, awaiting
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -128,6 +138,8 @@ def home(
     imported: int = Query(0),
     existing: int = Query(0),
     invalid: int = Query(0),
+    extracted: int = Query(0),
+    awaiting: int = Query(0),
     db: Session = Depends(get_db),
 ):
     seed_once(db)
@@ -137,6 +149,8 @@ def home(
         "imported": imported,
         "existing": existing,
         "invalid": invalid,
+        "extracted": extracted,
+        "awaiting": awaiting,
     })
 
 
@@ -214,7 +228,6 @@ def render_results(request, db, criteria, prompt, sort, direction, page, per_pag
         return value
 
     results.sort(key=sort_key, reverse=reverse)
-
     total = len(results)
     pages = max(1, ceil(total / per_page))
     page = min(page, pages)
@@ -245,7 +258,7 @@ def add_manual_listing(
     db: Session = Depends(get_db),
 ):
     source = detect_source(url)
-    upsert_listing(db, {
+    listing = upsert_listing(db, {
         "source": source,
         "url": normalize_url(url),
         "title": title.strip() or "Noch nicht analysiert",
@@ -253,6 +266,7 @@ def add_manual_listing(
         "price": price,
         "status": "active",
     })
+    process_listing(db, listing)
     return RedirectResponse(url="/search?sort=first_seen_at&direction=desc", status_code=303)
 
 
@@ -277,11 +291,19 @@ async def add_batch_listings(
     urls = extract_urls(combined)
     raw_candidates = [line.strip() for line in combined.splitlines() if line.strip()]
     invalid += max(0, len(raw_candidates) - len(urls))
-    created, existing = import_urls(db, urls)
+    created, existing, extracted, awaiting = import_urls(db, urls)
     return RedirectResponse(
-        url=f"/?imported={created}&existing={existing}&invalid={invalid}#batch-import",
+        url=f"/?imported={created}&existing={existing}&invalid={invalid}&extracted={extracted}&awaiting={awaiting}#batch-import",
         status_code=303,
     )
+
+
+@app.post("/listings/{listing_id}/reprocess")
+def reprocess_listing(listing_id: int, db: Session = Depends(get_db)):
+    listing = db.get(Listing, listing_id)
+    if listing:
+        process_listing(db, listing)
+    return RedirectResponse(url="/search?sort=first_seen_at&direction=desc", status_code=303)
 
 
 @app.post("/sync/mobile")
@@ -315,4 +337,4 @@ def source_status():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.3.0"}
+    return {"status": "ok", "version": "0.4.0"}
