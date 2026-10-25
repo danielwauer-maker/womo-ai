@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .capture_routes import router as capture_router
 from .collectors.autoscout24 import AutoScout24Collector
 from .collectors.mobile_de import MobileDeCollector
 from .database import Base, engine, get_db
@@ -19,9 +20,10 @@ from .repository import upsert_listing
 from .scoring import SearchCriteria, matches_hard_filters, score_listing
 from .search_intent import criteria_from_prompt
 
-app = FastAPI(title="Womo AI", version="0.7.0")
+app = FastAPI(title="Womo AI", version="0.8.1")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(detail_router)
+app.include_router(capture_router)
 templates = Jinja2Templates(directory="app/templates")
 Base.metadata.create_all(bind=engine)
 
@@ -288,4 +290,4 @@ def source_status():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.7.0"}
+    return {"status": "ok", "version": "0.8.1"}
