@@ -14,7 +14,6 @@ class MobileDeExtractor(BaseExtractor):
         page_text = kwargs.get("page_text") or ""
         primary = f"{title}\n{description}"
 
-        # Objective values from the provider description.
         weight = self.int_match(r"Zul[aä]ssiges\s+Gesamtgewicht\s*[:\-]?\s*([\d\.\s]+)\s*kg", primary)
         if weight:
             result.fields["weight_kg"] = weight
@@ -41,11 +40,9 @@ class MobileDeExtractor(BaseExtractor):
             result.identity["engine"] = result.fields["engine"]
             result.evidence["engine"] = "provider_description"
         elif "engine" in result.fields:
-            # Never keep an engine inferred from page-wide recommendation text.
             result.fields.pop("engine", None)
             result.identity.pop("engine", None)
 
-        # Ford Transit etc.
         m = re.search(r"Fahrzeugtyp/Basis\s*[:\-]?\s*([^\n\r]+)", primary, re.I)
         if m:
             base = m.group(1).strip()
@@ -55,18 +52,17 @@ class MobileDeExtractor(BaseExtractor):
                 result.identity["base_model"] = parts[1]
             result.evidence["base_vehicle"] = "provider_description"
 
-        # mobile.de often writes the coachbuilder in the description, e.g. Roller Team 275.
-        m = re.search(r"Wohnmobil\s+(?:Ford\s+)?([A-ZÄÖÜ][A-Za-zÄÖÜäöüß\- ]+?)\s+([A-Za-z0-9][A-Za-z0-9\- ]{0,20})\s+mit\s+folgenden", primary, re.I)
-        if m:
-            result.identity["coachbuilder"] = m.group(1).strip()
-            result.identity["coach_model"] = m.group(2).strip()
-            result.evidence["coachbuilder"] = "provider_description"
-        else:
+        # BaseExtractor already resolves known coachbuilders from title/description.
+        # Only use the explicit Wohnmobil-Ausbau label as a fallback.
+        if not result.identity.get("coachbuilder"):
             m = re.search(r"Wohnmobil-Ausbau\s*[:\-]?\s*([^\n\r]+)", primary, re.I)
             if m:
                 result.identity["coachbuilder"] = m.group(1).strip()
+        if result.identity.get("coachbuilder") == "Roller Team":
+            mm = re.search(r"\bRoller\s+Team\s+([A-Za-z0-9-]+)", primary, re.I)
+            if mm:
+                result.identity["coach_model"] = mm.group(1)
 
-        # Compact useful signals from provider description.
         if re.search(r"T[ÜU]V/AU\s+neu", primary, re.I):
             result.signals["tuev_text"] = "TÜV/AU neu"
         if re.search(r"Serviceheft\s+gepflegt", primary, re.I):
@@ -74,7 +70,6 @@ class MobileDeExtractor(BaseExtractor):
         if re.search(r"Austauschmotor", primary, re.I):
             result.signals["engine_replaced"] = True
 
-        # Strict image filtering for mobile.de vehicle CDN and query-size dedupe.
         candidates = result.images
         vehicle = []
         for url in candidates:
@@ -99,7 +94,6 @@ class MobileDeExtractor(BaseExtractor):
                 best[key] = (score, url)
         result.images = dedupe_urls([x[1] for x in best.values()])
 
-        # Listing ID from text fallback if present.
         m = re.search(r"\bid\s*[=:]\s*([0-9]{8,})\b", page_text, re.I)
         if m:
             result.signals["portal_listing_id"] = m.group(1)
