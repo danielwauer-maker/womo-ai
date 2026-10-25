@@ -29,9 +29,8 @@ def _engine_from_text(text: str) -> str | None:
     if not text:
         return None
     patterns = [
-        # Prefer explicit displacement + turbo/diesel wording.
         r"\b(\d[\.,]\d\s*(?:l(?:iter)?\s*)?(?:turbo\s*)?diesel)\b",
-        r"\b(\d[\.,]\d\s*(?:tdi|td|jtd|hdi|dci|cdi))\b",
+        r"\b(\d[\.,]\d\s*(?:tdi|td|jtd|hdi|dci|cdi|tdci))\b",
         r"\b(\d[\.,]\d\s*(?:l(?:iter)?\s*)?diesel)\b",
     ]
     for pattern in patterns:
@@ -46,8 +45,8 @@ def _engine_from_text(text: str) -> str | None:
 def extract_vehicle_identity(primary_text: str, current_title: str = "", fallback_text: str = "") -> dict:
     """Extract chassis/base vehicle and coachbuilder separately.
 
-    primary_text should be the actual listing description / structured content.
-    fallback_text may contain the whole page and is only consulted for missing values.
+    Whole-page fallback may contain recommendations/ads, so it is only used for identity names,
+    never for the engine. A missing engine is safer than a false one.
     """
     primary = f"{current_title}\n{primary_text or ''}".strip()
     fallback = fallback_text or ""
@@ -85,7 +84,6 @@ def extract_vehicle_identity(primary_text: str, current_title: str = "", fallbac
 
     coachbuilder = result.get("coachbuilder")
     if coachbuilder:
-        # Capture a short model phrase immediately following the coachbuilder.
         variants = [coachbuilder]
         if coachbuilder == "Bürstner":
             variants.append("Buerstner")
@@ -104,8 +102,6 @@ def extract_vehicle_identity(primary_text: str, current_title: str = "", fallbac
     engine = _engine_from_text(primary_text or "")
     if not engine:
         engine = _engine_from_text(current_title or "")
-    if not engine:
-        engine = _engine_from_text(fallback[:12000])
     if engine:
         result["engine"] = engine
 
@@ -191,7 +187,6 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
     if identity.get("engine"):
         result["engine"] = identity["engine"]
 
-    # Legacy 'make' now prefers the coachbuilder; base vehicle is stored separately.
     if identity.get("coachbuilder"):
         result["make"] = identity["coachbuilder"]
     elif identity.get("base_make"):
