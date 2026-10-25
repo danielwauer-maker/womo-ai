@@ -1,9 +1,15 @@
+from .autoscout24 import AutoScout24Extractor
 from .base import BaseExtractor, ExtractionResult
+from .caraworld import CaraworldExtractor
+from .kleinanzeigen import KleinanzeigenExtractor
 from .mobile_de import MobileDeExtractor
 
 
 EXTRACTORS = {
     "mobile.de": MobileDeExtractor(),
+    "Kleinanzeigen": KleinanzeigenExtractor(),
+    "AutoScout24": AutoScout24Extractor(),
+    "Caraworld": CaraworldExtractor(),
 }
 
 
