@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Womo AI · {{ item.title }}{% endblock %}
+{% block content %}
+<section class="results-head">
+  <div>
+    <p class="eyebrow">INSERAT-DETAIL</p>
+    <h1>{{ item.title or 'Noch nicht analysiert' }}</h1>
+    <p>{{ item.source }} · <a href="{{ item.url }}" target="_blank" rel="noopener">Original öffnen ↗</a></p>
+  </div>
+  <a class="secondary" href="/archive">← Zurück zum Archiv</a>
+</section>
+
+<section class="panel search-panel">
+  <div class="panel-head">
+    <div><p class="eyebrow">AKTUELLER STAND</p><h2>{{ item.score }}/100 Punkte</h2></div>
+    <span class="import-state {{ item.import_state }}">{{ item.import_state }}</span>
+  </div>
+  {% if item.import_message %}<p class="import-message">{{ item.import_message }}</p>{% endif %}
+  <div class="facts">
+    <span>{% if item.price is not none %}<strong>{{ "{:,}".format(item.price).replace(",", ".") }} €</strong>{% else %}Preis offen{% endif %}</span>
+    <span>{{ item.year or 'Bj. offen' }}</span>
+    <span>{% if item.mileage is not none %}{{ "{:,}".format(item.mileage).replace(",", ".") }} km{% else %}km offen{% endif %}</span>
+    <span>{{ item.engine or 'Motor offen' }}</span>
+    <span>{% if item.weight_kg %}{{ item.weight_kg }} kg{% else %}Gewicht offen{% endif %}</span>
+  </div>
+  {% if item.score_reasons %}
+    <div class="analysis-grid">
+      <div>
+        <h3>Offene Punkte / Abzüge</h3>
+        {% for reason in item.score_reasons[:8] %}<p class="risk">! {{ reason }}</p>{% endfor %}
+      </div>
+      <div>
+        <h3>Bereits bekannt</h3>
+        <p>3-Punkt-Gurt: {% if item.three_point_belt is true %}ja{% elif item.three_point_belt is false %}nein{% else %}unklar{% endif %}</p>
+        <p>Feuchte: {{ item.dry_status }}</p>
+        <p>Reparaturbedarf: {{ item.repair_level }}</p>
+      </div>
+    </div>
+  {% endif %}
+</section>
+
+<section class="panel manual-panel">
+  <div class="panel-head">
+    <div>
+      <p class="eyebrow">DATEN ERGÄNZEN</p>
+      <h2>Inseratstext einfügen und automatisch auswerten</h2>
+    </div>
+  </div>
+  <p class="muted">Kopiere am besten die komplette Beschreibung sowie sichtbare technische Daten aus dem Inserat. Womo AI versucht daraus Preis, Baujahr, Kilometer, Motor, Gewicht, Sitzplätze, Gurt- und Feuchtehinweise zu erkennen. Alles bleibt anschließend manuell korrigierbar.</p>
+
+  <form method="post" action="/listings/{{ item.id }}/enrich" class="form-grid compact-form-grid">
+    <label class="full-span prompt-field">Kompletter Inseratstext
+      <textarea name="raw_text" rows="12" placeholder="Beschreibung und technische Daten hier einfügen ...">{{ item.description or '' }}</textarea>
+    </label>
+
+    <label class="full-span">Titel
+      <input type="text" name="title" value="{{ item.title or '' }}">
+    </label>
+
+    <label>Preis (€)<input type="number" name="price" value="{{ item.price or '' }}"></label>
+    <label>Baujahr<input type="number" name="year" value="{{ item.year or '' }}"></label>
+    <label>Kilometer<input type="number" name="mileage" value="{{ item.mileage or '' }}"></label>
+
+    <label>Standort<input type="text" name="location" value="{{ item.location or '' }}"></label>
+    <label>Hersteller<input type="text" name="make" value="{{ item.make or '' }}"></label>
+    <label>Modell<input type="text" name="model" value="{{ item.model or '' }}"></label>
+
+    <label>Aufbauart<input type="text" name="body_type" value="{{ item.body_type or '' }}" placeholder="z. B. Alkoven"></label>
+    <label>Motor<input type="text" name="engine" value="{{ item.engine or '' }}" placeholder="z. B. 2.5 TD"></label>
+    <label>Leistung (kW)<input type="number" name="power_kw" value="{{ item.power_kw or '' }}"></label>
+
+    <label>Sitzplätze<input type="number" name="seats" value="{{ item.seats or '' }}"></label>
+    <label>Gesamtgewicht (kg)<input type="number" name="weight_kg" value="{{ item.weight_kg or '' }}"></label>
+    <label>3-Punkt-Gurt
+      <select name="three_point_belt">
+        <option value="unknown" {% if item.three_point_belt is none %}selected{% endif %}>unklar</option>
+        <option value="yes" {% if item.three_point_belt is true %}selected{% endif %}>ja</option>
+        <option value="no" {% if item.three_point_belt is false %}selected{% endif %}>nein</option>
+      </select>
+    </label>
+
+    <label>Feuchtigkeit
+      <select name="dry_status">
+        <option value="unknown" {% if item.dry_status=='unknown' %}selected{% endif %}>unklar</option>
+        <option value="claimed_dry" {% if item.dry_status=='claimed_dry' %}selected{% endif %}>laut Verkäufer trocken</option>
+        <option value="measured_dry" {% if item.dry_status=='measured_dry' %}selected{% endif %}>gemessen trocken</option>
+      </select>
+    </label>
+    <label>Reparaturbedarf
+      <select name="repair_level">
+        <option value="unknown" {% if item.repair_level=='unknown' %}selected{% endif %}>unklar</option>
+        <option value="light" {% if item.repair_level=='light' %}selected{% endif %}>gering</option>
+        <option value="medium" {% if item.repair_level=='medium' %}selected{% endif %}>mittel</option>
+        <option value="heavy" {% if item.repair_level=='heavy' %}selected{% endif %}>hoch</option>
+      </select>
+    </label>
+
+    <div></div>
+    <button class="primary" type="submit">Text auswerten & Daten speichern →</button>
+  </form>
+</section>
+
+{% if item.images %}
+<section class="panel manual-panel">
+  <div class="panel-head"><div><p class="eyebrow">BILDER</p><h2>{{ item.images|length }} gespeicherte Bildreferenzen</h2></div></div>
+  <div class="detail-gallery">
+    {% for image in item.images %}<img src="{{ image }}" alt="Inseratsbild" loading="lazy">{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if item.prices %}
+<section class="panel manual-panel">
+  <div class="panel-head"><div><p class="eyebrow">PREISVERLAUF</p><h2>Historie</h2></div></div>
+  <div class="facts">
+    {% for p in item.prices[:12] %}<span>{{ p.observed_at.strftime('%d.%m.%Y') }} · <strong>{{ "{:,}".format(p.price).replace(",", ".") }} €</strong></span>{% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
