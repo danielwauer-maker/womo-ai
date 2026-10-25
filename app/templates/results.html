@@ -57,6 +57,15 @@
           <p class="source">{{ item.source }}{% if item.location %} · {{ item.location }}{% endif %}{% if item.distance_km is not none %} · {{ item.distance_km|round|int }} km{% endif %}</p>
           <h2>{{ item.title }}</h2>
           <span class="availability {{ item.status }}">{{ 'aktiv' if item.status=='active' else 'nicht mehr verfügbar' }}</span>
+          {% if item.import_state != 'ready' %}
+            <span class="import-state {{ item.import_state }}">
+              {% if item.import_state == 'extracted' %}✓ Daten automatisch übernommen
+              {% elif item.import_state == 'processing' %}↻ Wird verarbeitet
+              {% elif item.import_state == 'awaiting_details' %}○ Details/API noch erforderlich
+              {% elif item.import_state == 'failed' %}! Extraktion fehlgeschlagen
+              {% else %}{{ item.import_state }}{% endif %}
+            </span>
+          {% endif %}
         </div>
         <div class="score {% if item.score >= 85 %}great{% elif item.score >= 70 %}good{% else %}warn{% endif %}"><strong>{{ item.score }}</strong><span>/100</span></div>
       </div>
@@ -68,6 +77,7 @@
         <span>{% if item.weight_kg %}{{ item.weight_kg }} kg{% else %}Gewicht offen{% endif %}</span>
       </div>
       <p class="description">{{ item.description or 'Noch keine Beschreibung archiviert.' }}</p>
+      {% if item.import_message %}<p class="import-message">{{ item.import_message }}</p>{% endif %}
       <div class="analysis-grid">
         <div><h3>Bewertung</h3>{% if item.score_reasons %}{% for reason in item.score_reasons[:5] %}<p class="risk">! {{ reason }}</p>{% endfor %}{% else %}<p class="positive">✓ Keine größeren Abweichungen erkannt</p>{% endif %}</div>
         <div><h3>Status</h3>
@@ -77,7 +87,10 @@
       </div>
       <div class="card-footer">
         <span>Erstfund: {{ item.first_seen_at.strftime('%d.%m.%Y') if item.first_seen_at else '—' }}</span>
-        <span>{% if item.url and not item.url.startswith('seed://') %}<a href="{{ item.url }}" target="_blank" rel="noopener">Original öffnen ↗</a>{% else %}Testdatensatz{% endif %}</span>
+        <span class="footer-actions">
+          {% if item.import_state in ['awaiting_details','failed'] %}<form method="post" action="/listings/{{ item.id }}/reprocess"><button class="link-button" type="submit">Erneut verarbeiten</button></form>{% endif %}
+          {% if item.url and not item.url.startswith('seed://') %}<a href="{{ item.url }}" target="_blank" rel="noopener">Original öffnen ↗</a>{% else %}Testdatensatz{% endif %}
+        </span>
       </div>
     </div>
   </article>
