@@ -36,6 +36,7 @@ class Listing(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     images: Mapped[list["ListingImage"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
     prices: Mapped[list["PriceHistory"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
+    import_state: Mapped["ImportState | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
 
 class ListingImage(Base):
     __tablename__ = "listing_images"
@@ -54,6 +55,15 @@ class PriceHistory(Base):
     price: Mapped[int] = mapped_column(Integer)
     observed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     listing: Mapped[Listing] = relationship(back_populates="prices")
+
+class ImportState(Base):
+    __tablename__ = "import_states"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"), unique=True, index=True)
+    state: Mapped[str] = mapped_column(String(40), default="queued", index=True)
+    message: Mapped[str] = mapped_column(String(500), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    listing: Mapped[Listing] = relationship(back_populates="import_state")
 
 class SearchProfile(Base):
     __tablename__ = "search_profiles"
