@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Womo AI · One-Tap Capture{% endblock %}
+{% block content %}
+<section class="results-head">
+  <div>
+    <p class="eyebrow">ONE-TAP CAPTURE</p>
+    <h1>Inserat mit einem Klick übernehmen</h1>
+    <p>Der Capture liest nur die Seite aus, die du selbst gerade geöffnet hast, und sendet sichtbaren Seitentext, Meta-/JSON-LD-Daten und geladene Bild-URLs an deine Womo-AI-Instanz.</p>
+  </div>
+  <a class="secondary" href="/archive">Zum Archiv</a>
+</section>
+
+<section class="panel capture-panel">
+  <div class="panel-head">
+    <div>
+      <h2>1. Capture-Favorit anlegen</h2>
+      <p class="muted">Diese Installation sendet an <strong>{{ origin }}</strong>. Wenn du den Favoriten am Handy einrichtest, öffne diese Seite vorher über die Netzwerk-IP deines Laptops.</p>
+    </div>
+  </div>
+
+  <div class="capture-bookmarklet-box">
+    <a class="primary capture-bookmarklet" href="{{ bookmarklet }}">Womo AI · Inserat übernehmen</a>
+    <button class="secondary" type="button" id="copy-bookmarklet">Bookmarklet-Code kopieren</button>
+  </div>
+  <textarea id="bookmarklet-code" class="bookmarklet-code" readonly>{{ bookmarklet }}</textarea>
+</section>
+
+<section class="capture-steps">
+  <article class="panel">
+    <strong>Desktop</strong>
+    <span>Ziehe den Button „Womo AI · Inserat übernehmen“ in deine Lesezeichenleiste. Öffne danach ein Inserat und klicke den Favoriten.</span>
+  </article>
+  <article class="panel">
+    <strong>iPhone / iPad</strong>
+    <span>Lege in Safari zunächst irgendein Lesezeichen an, bearbeite es anschließend und ersetze die Adresse durch den kopierten Bookmarklet-Code. Öffne dann ein Inserat und starte den Favoriten.</span>
+  </article>
+  <article class="panel">
+    <strong>Ergebnis</strong>
+    <span>Womo AI übernimmt URL, Titel, Beschreibung, Seitentext, strukturierte Daten und gefundene Bilder, berechnet den Score und öffnet direkt die Detailseite.</span>
+  </article>
+</section>
+
+<section class="panel capture-panel capture-note">
+  <h2>Was automatisch übernommen wird</h2>
+  <div class="criteria-strip">
+    <span>URL</span><span>Titel</span><span>Preis</span><span>Baujahr</span><span>Kilometer</span><span>Motor / Leistung</span><span>Gewicht</span><span>Sitzplätze</span><span>Beschreibung</span><span>JSON-LD</span><span>Bild-URLs</span><span>WomoScore</span>
+  </div>
+  <p class="muted">Nicht jedes Portal stellt alle Informationen gleich bereit. Unklare Werte bleiben bewusst offen und können auf der Detailseite korrigiert werden. Der Capture versucht keine CAPTCHAs oder Zugriffsschutzmaßnahmen zu umgehen.</p>
+</section>
+
+<script>
+  document.getElementById('copy-bookmarklet')?.addEventListener('click', async () => {
+    const value = document.getElementById('bookmarklet-code').value;
+    try {
+      await navigator.clipboard.writeText(value);
+      const button = document.getElementById('copy-bookmarklet');
+      button.textContent = 'Kopiert ✓';
+      setTimeout(() => button.textContent = 'Bookmarklet-Code kopieren', 1800);
+    } catch (e) {
+      document.getElementById('bookmarklet-code').select();
+    }
+  });
+</script>
+{% endblock %}
