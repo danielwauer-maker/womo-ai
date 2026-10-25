@@ -95,6 +95,13 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
         "import_message": listing.import_state.message if listing.import_state else "",
     }
     score, reasons = score_listing(data, SearchCriteria())
+
+    # Decision-critical findings belong in the primary risk summary, not hidden in free text.
+    for finding in technical.get("condition_findings", [])[:4]:
+        reasons.insert(0, f"Zustandshinweis: {finding}")
+    if technical.get("moisture_issue"):
+        reasons.insert(0, "Feuchtigkeits-/Wasserschadenhinweis im Inserat erkannt")
+
     data["score"] = score
     data["score_reasons"] = reasons
     return templates.TemplateResponse("listing_detail.html", {"request": request, "item": data})
