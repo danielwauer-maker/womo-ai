@@ -17,13 +17,15 @@ from .detail_routes import router as detail_router
 from .importer import process_listing
 from .models import Listing
 from .repository import upsert_listing
+from .review_routes import router as review_router
 from .scoring import SearchCriteria, matches_hard_filters, score_listing
 from .search_intent import criteria_from_prompt
 
-app = FastAPI(title="Womo AI", version="0.8.1")
+app = FastAPI(title="Womo AI", version="0.9.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(detail_router)
 app.include_router(capture_router)
+app.include_router(review_router)
 templates = Jinja2Templates(directory="app/templates")
 Base.metadata.create_all(bind=engine)
 
@@ -290,4 +292,4 @@ def source_status():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.8.1"}
+    return {"status": "ok", "version": "0.9.0"}
