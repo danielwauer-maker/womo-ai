@@ -9,6 +9,7 @@ from .database import get_db
 from .models import Listing, VehicleIdentity
 from .repository import upsert_listing
 from .scoring import SearchCriteria, score_listing
+from .technical_data import extract_technical_data, loads_technical_data
 from .text_enrichment import extract_listing_text, extract_vehicle_identity
 
 router = APIRouter()
@@ -35,6 +36,16 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
     captured_images = len(listing.images)
     reported_images = signals.reported_image_count if signals else None
     missing_images = max(0, (reported_images or captured_images) - captured_images)
+    latest_capture = max(listing.captures, key=lambda c: c.captured_at) if listing.captures else None
+
+    technical = loads_technical_data(listing.technical_data.data_json) if listing.technical_data else {}
+    if latest_capture:
+        live_technical = extract_technical_data("\n\n".join([
+            listing.description or "",
+            latest_capture.meta_description or "",
+            latest_capture.page_text or "",
+        ]))
+        technical = {**live_technical, **technical}
 
     data = {
         "id": listing.id,
@@ -62,6 +73,7 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
         "coachbuilder": identity.coachbuilder if identity else None,
         "coach_model": identity.coach_model if identity else None,
         "engine_text": identity.engine_text if identity else listing.engine,
+        "technical": technical,
         "images": [img.remote_url for img in listing.images],
         "reported_image_count": reported_images,
         "missing_image_count": missing_images,
@@ -78,7 +90,7 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
         "dealer_name": signals.dealer_name if signals else None,
         "prices": sorted(listing.prices, key=lambda x: x.observed_at, reverse=True),
         "capture_count": len(listing.captures),
-        "last_capture_at": max((capture.captured_at for capture in listing.captures), default=None),
+        "last_capture_at": latest_capture.captured_at if latest_capture else None,
         "import_state": listing.import_state.state if listing.import_state else "ready",
         "import_message": listing.import_state.message if listing.import_state else "",
     }
