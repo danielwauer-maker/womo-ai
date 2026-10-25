@@ -38,6 +38,7 @@ class Listing(Base):
     prices: Mapped[list["PriceHistory"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
     captures: Mapped[list["CaptureSnapshot"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
     vehicle_identity: Mapped["VehicleIdentity | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
+    signals: Mapped["ListingSignals | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
     import_state: Mapped["ImportState | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
 
 class ListingImage(Base):
@@ -81,6 +82,26 @@ class VehicleIdentity(Base):
     engine_text: Mapped[str | None] = mapped_column(String(180), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     listing: Mapped[Listing] = relationship(back_populates="vehicle_identity")
+
+class ListingSignals(Base):
+    __tablename__ = "listing_signals"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"), unique=True, index=True)
+    portal_listing_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    listed_at_text: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    seller_name: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    seller_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    seller_active_since: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    seller_ads_online: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seller_ads_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seller_badges: Mapped[str | None] = mapped_column(Text, nullable=True)
+    views: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    watchers: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reported_image_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dealer_name: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    raw_signal_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    listing: Mapped[Listing] = relationship(back_populates="signals")
 
 class ImportState(Base):
     __tablename__ = "import_states"
