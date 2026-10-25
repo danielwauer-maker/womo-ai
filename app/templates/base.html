@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Womo AI{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">W</span><span>Womo AI</span></a>
+    <span class="badge">MVP 0.1</span>
+  </header>
+  <main class="page">{% block content %}{% endblock %}</main>
+</body>
+</html>
