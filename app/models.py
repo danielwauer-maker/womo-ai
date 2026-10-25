@@ -36,6 +36,7 @@ class Listing(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     images: Mapped[list["ListingImage"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
     prices: Mapped[list["PriceHistory"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
+    captures: Mapped[list["CaptureSnapshot"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
     import_state: Mapped["ImportState | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
 
 class ListingImage(Base):
@@ -55,6 +56,18 @@ class PriceHistory(Base):
     price: Mapped[int] = mapped_column(Integer)
     observed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     listing: Mapped[Listing] = relationship(back_populates="prices")
+
+class CaptureSnapshot(Base):
+    __tablename__ = "capture_snapshots"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"), index=True)
+    page_title: Mapped[str] = mapped_column(Text, default="")
+    meta_description: Mapped[str] = mapped_column(Text, default="")
+    page_text: Mapped[str] = mapped_column(Text, default="")
+    structured_data: Mapped[str] = mapped_column(Text, default="")
+    image_urls_json: Mapped[str] = mapped_column(Text, default="[]")
+    captured_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    listing: Mapped[Listing] = relationship(back_populates="captures")
 
 class ImportState(Base):
     __tablename__ = "import_states"
