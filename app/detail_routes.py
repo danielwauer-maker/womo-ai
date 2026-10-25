@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from .capture_routes import router as capture_router
 from .database import get_db
 from .models import Listing
 from .repository import upsert_listing
@@ -10,6 +11,7 @@ from .scoring import SearchCriteria, score_listing
 from .text_enrichment import extract_listing_text
 
 router = APIRouter()
+router.include_router(capture_router)
 templates = Jinja2Templates(directory="app/templates")
 
 
@@ -50,6 +52,8 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
         "status": listing.status,
         "images": [img.remote_url for img in listing.images],
         "prices": sorted(listing.prices, key=lambda x: x.observed_at, reverse=True),
+        "capture_count": len(listing.captures),
+        "last_capture_at": max((capture.captured_at for capture in listing.captures), default=None),
         "import_state": listing.import_state.state if listing.import_state else "ready",
         "import_message": listing.import_state.message if listing.import_state else "",
     }
