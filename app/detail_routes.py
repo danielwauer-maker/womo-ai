@@ -8,7 +8,7 @@ from .capture_routes import router as capture_router
 from .database import get_db
 from .models import Listing, VehicleIdentity
 from .repository import upsert_listing
-from .scoring import SearchCriteria, score_listing
+from .scoring import SearchCriteria, assess_listing, score_listing
 from .technical_data import extract_technical_data, loads_technical_data
 from .text_enrichment import extract_listing_text, extract_vehicle_identity
 
@@ -94,16 +94,11 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
         "import_state": listing.import_state.state if listing.import_state else "ready",
         "import_message": listing.import_state.message if listing.import_state else "",
     }
-    score, reasons = score_listing(data, SearchCriteria())
 
-    # Decision-critical findings belong in the primary risk summary, not hidden in free text.
-    for finding in technical.get("condition_findings", [])[:4]:
-        reasons.insert(0, f"Zustandshinweis: {finding}")
-    if technical.get("moisture_issue"):
-        reasons.insert(0, "Feuchtigkeits-/Wasserschadenhinweis im Inserat erkannt")
-
-    data["score"] = score
-    data["score_reasons"] = reasons
+    assessment = assess_listing(data, SearchCriteria())
+    data["score"] = assessment["score"]
+    data["assessment"] = assessment
+    data["score_reasons"] = assessment["blockers"] + assessment["risks"] + assessment["unknowns"]
     return templates.TemplateResponse("listing_detail.html", {"request": request, "item": data})
 
 
