@@ -138,10 +138,6 @@ def _mobile_image_score(url: str) -> int:
 
 
 def _filter_portal_images(source: str, candidates: list[str]) -> list[str]:
-    """Return listing photos only and collapse responsive-size variants.
-
-    We deliberately prefer false negatives over importing unrelated portal/marketing imagery.
-    """
     valid = []
     for url in candidates:
         if not isinstance(url, str) or not url.startswith("http"):
@@ -152,7 +148,6 @@ def _filter_portal_images(source: str, candidates: list[str]) -> list[str]:
         valid.append(url)
 
     if source == "mobile.de":
-        # mobile.de listing photos are served through the classified vehicle-image CDN.
         gallery = []
         for url in valid:
             parsed = urlparse(url)
@@ -162,8 +157,6 @@ def _filter_portal_images(source: str, candidates: list[str]) -> list[str]:
                 gallery.append(url)
         if gallery:
             valid = gallery
-
-        # The same photo is exposed at many responsive sizes. Its CDN path is the stable identity.
         best_by_key: dict[str, tuple[int, str]] = {}
         for url in valid:
             parsed = urlparse(url)
@@ -174,7 +167,6 @@ def _filter_portal_images(source: str, candidates: list[str]) -> list[str]:
                 best_by_key[key] = (score, url)
         return [item[1] for item in best_by_key.values()]
 
-    # Generic dedupe: query strings often only carry crop/size transformations.
     seen = set()
     result = []
     for url in valid:
@@ -211,7 +203,6 @@ def _extract_signals(source: str, page_text: str, portal_data: dict, image_count
         "reported_image_count": portal_data.get("reported_image_count"),
         "dealer_name": portal_data.get("dealer_name"),
     }
-
     if source == "Kleinanzeigen":
         m = re.search(r"Aktiv seit\s+([^\n]+)", text, re.I)
         if m and not data["seller_active_since"]:
@@ -234,7 +225,6 @@ def _extract_signals(source: str, page_text: str, portal_data: dict, image_count
                 badges.append(badge)
         if badges and not data["seller_badges"]:
             data["seller_badges"] = ", ".join(badges)
-
     elif source == "Caraworld":
         if not data["portal_listing_id"]:
             m = re.search(r"Caraworld ID\s+([^\n]+)", text, re.I)
@@ -248,14 +238,12 @@ def _extract_signals(source: str, page_text: str, portal_data: dict, image_count
             reported = _int_from_match(r"([0-9]{1,3})\s+Bilder", text)
             if reported:
                 data["reported_image_count"] = reported
-
     raw = {k: v for k, v in data.items() if v not in (None, "")}
     data["raw_signal_text"] = json.dumps(raw, ensure_ascii=False)
     return data
 
 
 def _bookmarklet(target: str) -> str:
-    # Portal-aware capture. Reads only the page the user has opened; no background crawling.
     js = r'''javascript:(()=>{try{const q=(s)=>document.querySelector(s);const qa=(s)=>Array.from(document.querySelectorAll(s));const meta=(p)=>q(`meta[property="${p}"]`)?.content||q(`meta[name="${p}"]`)?.content||'';const txt=(el)=>el?.innerText?.trim()||'';const body=(document.body?.innerText||'');const host=location.hostname.toLowerCase();const abs=(u)=>{try{return new URL(u,location.href).href}catch{return''}};const urls=new Set();const add=(u)=>{u=abs((u||'').trim());if(/^https?:/i.test(u)&&!/(logo|avatar|icon|sprite|badge|banner|placeholder)/i.test(u))urls.add(u)};const srcset=(v)=>String(v||'').split(',').forEach(x=>add(x.trim().split(/\s+/)[0]));add(meta('og:image'));qa('img').forEach(i=>{add(i.currentSrc);add(i.src);['data-src','data-lazy-src','data-original','data-image','data-url'].forEach(a=>add(i.getAttribute(a)));srcset(i.srcset);srcset(i.getAttribute('data-srcset'))});qa('source').forEach(s=>{srcset(s.srcset);srcset(s.getAttribute('data-srcset'))});qa('link[rel="preload"][as="image"],link[rel="image_src"]').forEach(l=>add(l.href));qa('a[href]').forEach(a=>{/\.(jpe?g|png|webp)(\?|$)/i.test(a.href)&&add(a.href)});qa('[style*="background-image"]').forEach(e=>{const m=(e.style.backgroundImage||'').match(/url\(["']?(.*?)["']?\)/i);m&&add(m[1])});const ld=qa('script[type="application/ld+json"]').slice(0,40).map(s=>s.textContent||'');let desc=txt(q('[itemprop="description"]'))||txt(q('[data-testid*="description" i]'))||txt(q('[class*="description" i]'))||meta('og:description')||meta('description');const p={host};const pick=(r)=>{const m=body.match(r);return m?m[1].trim():''};const num=(v)=>{const n=parseInt(String(v||'').replace(/\D/g,''),10);return Number.isFinite(n)?n:null};if(host.includes('kleinanzeigen')){p.listing_id=pick(/Anzeigen-ID\s*([0-9]{6,})/i)||((location.pathname.match(/\/([0-9]{6,})-[0-9-]+\/?$/)||[])[1]||'');p.seller_active_since=pick(/Aktiv seit\s+([^\n]+)/i);p.seller_type=pick(/\b(Privater Nutzer|Gewerblicher Nutzer)\b/i);p.seller_ads_online=num(pick(/([\d.]+)\s+Anzeigen online/i));p.seller_ads_total=num(pick(/([\d.]+)\s+Anzeigen gesamt/i));const b=['TOP Zufriedenheit','Besonders freundlich','Sehr freundlich','Besonders zuverlässig','Sehr zuverlässig'].filter(x=>body.toLowerCase().includes(x.toLowerCase()));p.seller_badges=b.join(', ');const date=body.match(/(?:Nordrhein-Westfalen|Rheinland-Pfalz|Bayern|Hessen|Niedersachsen|Sachsen|Thüringen|Brandenburg|Berlin|Hamburg|Bremen|Saarland|Schleswig-Holstein|Baden-Württemberg|Mecklenburg-Vorpommern|Sachsen-Anhalt)[^\n]*\n([^\n]{3,30})/i);if(date)p.listed_at=date[1].trim()}else if(host.includes('caraworld')){p.listing_id=pick(/Caraworld ID\s+([^\n]+)/i);p.reported_image_count=num(pick(/([0-9]{1,3})\s+Bilder/i));const h=body.match(/(?:Anbieter|Händlerseite)\s*\n\s*([^\n]{2,100})/i);if(h)p.dealer_name=h[1].trim()}else if(host.includes('autoscout24')){p.listing_id=((location.pathname.match(/-([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})/i)||[])[1]||'');const c=body.match(/(?:Bilder|Fotos)\s*[: ]\s*([0-9]{1,3})/i);if(c)p.reported_image_count=num(c[1])}else if(host.includes('mobile.de')){p.listing_id=(new URLSearchParams(location.search)).get('id')||'';const c=body.match(/(?:Bilder|Fotos)\s*[: ]\s*([0-9]{1,3})/i);if(c)p.reported_image_count=num(c[1])}let captured=[...urls];if(host.includes('mobile.de')){const m=captured.filter(u=>/classistatic/i.test(u)&&/mo-prod\/images/i.test(u));if(m.length)captured=m}const data={url:location.href,title:meta('og:title')||document.title||'',meta_description:meta('og:description')||meta('description')||'',description:desc,page_text:body.slice(0,150000),structured_data:JSON.stringify(ld),image_urls:JSON.stringify(captured.slice(0,180)),portal_data:JSON.stringify(p)};const f=document.createElement('form');f.method='POST';f.action='__TARGET__';f.target='_self';for(const[k,v]of Object.entries(data)){const x=document.createElement('textarea');x.name=k;x.value=v;x.style.display='none';f.appendChild(x)}document.body.appendChild(f);f.submit()}catch(e){alert('Womo AI Capture: '+e.message)}})()'''
     return js.replace("__TARGET__", target)
 
@@ -268,7 +256,13 @@ def capture_setup(request: Request):
         "request": request,
         "origin": origin,
         "bookmarklet": bookmarklet,
+        "error": request.query_params.get("error"),
     })
+
+
+@router.get("/capture/import")
+def capture_import_get():
+    return RedirectResponse(url="/capture/setup?error=stale_bookmarklet", status_code=303)
 
 
 @router.post("/capture/import")
@@ -336,14 +330,14 @@ def capture_import(
     payload["score_explanation"] = ", ".join(reasons)
     listing = upsert_listing(db, payload)
 
-    # Capture is an authoritative snapshot for image references: remove stale/marketing refs from earlier captures.
     image_set = set(images)
     for image in list(listing.images):
         if image.remote_url not in image_set:
             db.delete(image)
-    db.flush()
-    for index, image in enumerate(sorted(listing.images, key=lambda x: x.sort_order)):
-        image.sort_order = index
+    existing_urls = {img.remote_url for img in listing.images if img.remote_url in image_set}
+    for index, image_url in enumerate(images):
+        if image_url not in existing_urls:
+            db.add(ListingImage(listing_id=listing.id, remote_url=image_url, sort_order=index))
 
     vehicle = db.scalar(select(VehicleIdentity).where(VehicleIdentity.listing_id == listing.id))
     if not vehicle:
