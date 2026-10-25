@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import CaptureSnapshot, ImportState, Listing, VehicleIdentity
+from .models import CaptureSnapshot, ImportState, Listing, ListingSignals, VehicleIdentity
 from .repository import upsert_listing
 from .scoring import SearchCriteria, score_listing
 from .text_enrichment import extract_listing_text, extract_vehicle_identity
@@ -37,7 +37,7 @@ def _clean_url(url: str) -> str:
     return value if parsed.scheme in {"http", "https"} and parsed.netloc else ""
 
 
-def _safe_json_list(value: str, limit: int = 100) -> list[str]:
+def _safe_json_list(value: str, limit: int = 200) -> list[str]:
     try:
         parsed = json.loads(value or "[]")
     except (json.JSONDecodeError, TypeError):
@@ -54,6 +54,14 @@ def _safe_json_list(value: str, limit: int = 100) -> list[str]:
             seen.add(item)
             result.append(item)
     return result
+
+
+def _safe_json_dict(value: str) -> dict:
+    try:
+        parsed = json.loads(value or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _walk_json(value, result: dict) -> None:
@@ -108,7 +116,7 @@ def _structured_facts(structured_data: str) -> dict:
         scripts = []
     if not isinstance(scripts, list):
         scripts = []
-    for script in scripts[:30]:
+    for script in scripts[:40]:
         if not isinstance(script, str):
             continue
         try:
@@ -120,8 +128,77 @@ def _structured_facts(structured_data: str) -> dict:
     return result
 
 
+def _int_from_match(pattern: str, text: str) -> int | None:
+    match = re.search(pattern, text or "", re.I)
+    if not match:
+        return None
+    digits = re.sub(r"[^0-9]", "", match.group(1))
+    return int(digits) if digits else None
+
+
+def _extract_signals(source: str, page_text: str, portal_data: dict, image_count: int) -> dict:
+    text = page_text or ""
+    data = {
+        "portal_listing_id": portal_data.get("listing_id"),
+        "listed_at_text": portal_data.get("listed_at"),
+        "seller_name": portal_data.get("seller_name"),
+        "seller_type": portal_data.get("seller_type"),
+        "seller_active_since": portal_data.get("seller_active_since"),
+        "seller_ads_online": portal_data.get("seller_ads_online"),
+        "seller_ads_total": portal_data.get("seller_ads_total"),
+        "seller_badges": portal_data.get("seller_badges"),
+        "views": portal_data.get("views"),
+        "watchers": portal_data.get("watchers"),
+        "reported_image_count": portal_data.get("reported_image_count") or image_count,
+        "dealer_name": portal_data.get("dealer_name"),
+    }
+
+    if source == "Kleinanzeigen":
+        m = re.search(r"Aktiv seit\s+([^\n]+)", text, re.I)
+        if m and not data["seller_active_since"]:
+            data["seller_active_since"] = m.group(1).strip()[:80]
+        if not data["seller_type"]:
+            m = re.search(r"\b(Privater Nutzer|Gewerblicher Nutzer)\b", text, re.I)
+            if m:
+                data["seller_type"] = m.group(1)
+        if data["seller_ads_online"] is None:
+            data["seller_ads_online"] = _int_from_match(r"([\d.]+)\s+Anzeigen online", text)
+        if data["seller_ads_total"] is None:
+            data["seller_ads_total"] = _int_from_match(r"([\d.]+)\s+Anzeigen gesamt", text)
+        if not data["portal_listing_id"]:
+            m = re.search(r"Anzeigen-ID\s*([0-9]{6,})", text, re.I)
+            if m:
+                data["portal_listing_id"] = m.group(1)
+        # Only trust portal_data for views/watchers. Free-text claims in descriptions are not portal metrics.
+        badges = []
+        for badge in ("TOP Zufriedenheit", "Besonders freundlich", "Sehr freundlich", "Besonders zuverlässig", "Sehr zuverlässig"):
+            if badge.lower() in text.lower():
+                badges.append(badge)
+        if badges and not data["seller_badges"]:
+            data["seller_badges"] = ", ".join(badges)
+
+    elif source == "Caraworld":
+        if not data["portal_listing_id"]:
+            m = re.search(r"Caraworld ID\s+([^\n]+)", text, re.I)
+            if m:
+                data["portal_listing_id"] = m.group(1).strip()[:120]
+        if not data["dealer_name"]:
+            m = re.search(r"(?:Anbieter|Händlerlogo)\s*\n?\s*([^\n]{2,100})", text, re.I)
+            if m:
+                data["dealer_name"] = m.group(1).strip()
+        if data["reported_image_count"] in (None, image_count):
+            reported = _int_from_match(r"([0-9]{1,3})\s+Bilder", text)
+            if reported:
+                data["reported_image_count"] = reported
+
+    raw = {k: v for k, v in data.items() if v not in (None, "")}
+    data["raw_signal_text"] = json.dumps(raw, ensure_ascii=False)
+    return data
+
+
 def _bookmarklet(target: str) -> str:
-    js = r'''javascript:(()=>{try{const q=(s)=>document.querySelector(s);const meta=(p)=>q(`meta[property="${p}"]`)?.content||q(`meta[name="${p}"]`)?.content||'';const txt=(el)=>el?.innerText?.trim()||'';const desc=txt(q('[itemprop="description"]'))||txt(q('[data-testid*="description" i]'))||txt(q('[class*="description" i]'))||meta('og:description')||meta('description');const imgs=[meta('og:image'),...Array.from(document.images).filter(i=>(i.naturalWidth||i.width||0)>=280&&(i.naturalHeight||i.height||0)>=180).map(i=>i.currentSrc||i.src)].filter(Boolean).filter(u=>/^https?:/i.test(u));const ld=Array.from(document.querySelectorAll('script[type="application/ld+json"]')).slice(0,30).map(s=>s.textContent||'');const data={url:location.href,title:meta('og:title')||document.title||'',meta_description:meta('og:description')||meta('description')||'',description:desc,page_text:(document.body?.innerText||'').slice(0,120000),structured_data:JSON.stringify(ld),image_urls:JSON.stringify([...new Set(imgs)].slice(0,80))};const f=document.createElement('form');f.method='POST';f.action='__TARGET__';f.target='_self';for(const[k,v]of Object.entries(data)){const x=document.createElement('textarea');x.name=k;x.value=v;x.style.display='none';f.appendChild(x)}document.body.appendChild(f);f.submit()}catch(e){alert('Womo AI Capture: '+e.message)}})()'''
+    # Portal-aware capture. Reads only the page the user has opened; no background crawling.
+    js = r'''javascript:(()=>{try{const q=(s)=>document.querySelector(s);const qa=(s)=>Array.from(document.querySelectorAll(s));const meta=(p)=>q(`meta[property="${p}"]`)?.content||q(`meta[name="${p}"]`)?.content||'';const txt=(el)=>el?.innerText?.trim()||'';const body=(document.body?.innerText||'');const host=location.hostname.toLowerCase();const abs=(u)=>{try{return new URL(u,location.href).href}catch{return''}};const urls=new Set();const add=(u)=>{u=abs((u||'').trim());if(/^https?:/i.test(u)&&!/(logo|avatar|icon|sprite|badge)/i.test(u))urls.add(u)};const srcset=(v)=>String(v||'').split(',').forEach(x=>add(x.trim().split(/\s+/)[0]));add(meta('og:image'));qa('img').forEach(i=>{add(i.currentSrc);add(i.src);['data-src','data-lazy-src','data-original','data-image','data-url'].forEach(a=>add(i.getAttribute(a)));srcset(i.srcset);srcset(i.getAttribute('data-srcset'))});qa('source').forEach(s=>{srcset(s.srcset);srcset(s.getAttribute('data-srcset'))});qa('link[rel="preload"][as="image"],link[rel="image_src"]').forEach(l=>add(l.href));qa('a[href]').forEach(a=>{/\.(jpe?g|png|webp)(\?|$)/i.test(a.href)&&add(a.href)});qa('[style*="background-image"]').forEach(e=>{const m=(e.style.backgroundImage||'').match(/url\(["']?(.*?)["']?\)/i);m&&add(m[1])});const ld=qa('script[type="application/ld+json"]').slice(0,40).map(s=>s.textContent||'');let desc=txt(q('[itemprop="description"]'))||txt(q('[data-testid*="description" i]'))||txt(q('[class*="description" i]'))||meta('og:description')||meta('description');const p={host};const pick=(r)=>{const m=body.match(r);return m?m[1].trim():''};const num=(v)=>{const n=parseInt(String(v||'').replace(/\D/g,''),10);return Number.isFinite(n)?n:null};if(host.includes('kleinanzeigen')){p.listing_id=pick(/Anzeigen-ID\s*([0-9]{6,})/i)||((location.pathname.match(/\/([0-9]{6,})-[0-9-]+\/?$/)||[])[1]||'');p.seller_active_since=pick(/Aktiv seit\s+([^\n]+)/i);p.seller_type=pick(/\b(Privater Nutzer|Gewerblicher Nutzer)\b/i);p.seller_ads_online=num(pick(/([\d.]+)\s+Anzeigen online/i));p.seller_ads_total=num(pick(/([\d.]+)\s+Anzeigen gesamt/i));const b=['TOP Zufriedenheit','Besonders freundlich','Sehr freundlich','Besonders zuverlässig','Sehr zuverlässig'].filter(x=>body.toLowerCase().includes(x.toLowerCase()));p.seller_badges=b.join(', ');const date=body.match(/(?:Nordrhein-Westfalen|Rheinland-Pfalz|Bayern|Hessen|Niedersachsen|Sachsen|Thüringen|Brandenburg|Berlin|Hamburg|Bremen|Saarland|Schleswig-Holstein|Baden-Württemberg|Mecklenburg-Vorpommern|Sachsen-Anhalt)[^\n]*\n([^\n]{3,30})/i);if(date)p.listed_at=date[1].trim()}else if(host.includes('caraworld')){p.listing_id=pick(/Caraworld ID\s+([^\n]+)/i);p.reported_image_count=num(pick(/([0-9]{1,3})\s+Bilder/i));const h=body.match(/(?:Anbieter|Händlerseite)\s*\n\s*([^\n]{2,100})/i);if(h)p.dealer_name=h[1].trim()}else if(host.includes('autoscout24')){p.listing_id=((location.pathname.match(/-([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})/i)||[])[1]||'');const c=body.match(/(?:Bilder|Fotos)\s*([0-9]{1,3})/i);if(c)p.reported_image_count=num(c[1])}else if(host.includes('mobile.de')){p.listing_id=(new URLSearchParams(location.search)).get('id')||'';const c=body.match(/(?:Bilder|Fotos)\s*([0-9]{1,3})/i);if(c)p.reported_image_count=num(c[1])}const data={url:location.href,title:meta('og:title')||document.title||'',meta_description:meta('og:description')||meta('description')||'',description:desc,page_text:body.slice(0,150000),structured_data:JSON.stringify(ld),image_urls:JSON.stringify([...urls].slice(0,180)),portal_data:JSON.stringify(p)};const f=document.createElement('form');f.method='POST';f.action='__TARGET__';f.target='_self';for(const[k,v]of Object.entries(data)){const x=document.createElement('textarea');x.name=k;x.value=v;x.style.display='none';f.appendChild(x)}document.body.appendChild(f);f.submit()}catch(e){alert('Womo AI Capture: '+e.message)}})()'''
     return js.replace("__TARGET__", target)
 
 
@@ -145,36 +222,31 @@ def capture_import(
     page_text: str = Form(""),
     structured_data: str = Form("[]"),
     image_urls: str = Form("[]"),
+    portal_data: str = Form("{}"),
     db: Session = Depends(get_db),
 ):
     clean_url = _clean_url(url)
     if not clean_url:
         return RedirectResponse(url="/capture/setup?error=invalid_url", status_code=303)
 
+    source = _source_from_url(clean_url)
     structured = _structured_facts(structured_data)
+    portal = _safe_json_dict(portal_data)
     best_title = (title or structured.get("title") or "Noch nicht analysiert").strip()[:300]
     best_description = (description or structured.get("description") or meta_description or "").strip()
 
-    # High-confidence extraction: only listing-specific content first.
     primary_text = "\n\n".join(part for part in [best_description, meta_description] if part).strip()
     extracted = extract_listing_text(primary_text, current_title=best_title)
-
-    # Page-wide text can contain recommendations and ads. Use it only to fill still-missing generic facts.
-    fallback = extract_listing_text(page_text[:30000], current_title=best_title)
+    fallback = extract_listing_text(page_text[:35000], current_title=best_title)
     for key in ("price", "year", "mileage", "power_kw", "weight_kg", "seats", "body_type", "three_point_belt", "dry_status", "repair_level"):
         if key not in extracted and key in fallback:
             extracted[key] = fallback[key]
 
-    # Structured data is preferred for objective values when available.
     for key in ("price", "year", "mileage"):
         if structured.get(key) is not None:
             extracted[key] = structured[key]
 
-    identity = extract_vehicle_identity(
-        primary_text=primary_text,
-        current_title=best_title,
-        fallback_text=page_text[:30000],
-    )
+    identity = extract_vehicle_identity(primary_text=primary_text, current_title=best_title, fallback_text=page_text[:35000])
     if identity.get("engine"):
         extracted["engine"] = identity["engine"]
     if identity.get("coachbuilder"):
@@ -187,13 +259,13 @@ def capture_import(
     if not best_description:
         best_description = (structured.get("description") or page_text[:12000]).strip()
 
-    images = _safe_json_list(image_urls, 80)
+    images = _safe_json_list(image_urls, 180)
     images.extend(structured.get("images", []))
-    images = list(dict.fromkeys(image for image in images if image.startswith("http")))[:100]
+    images = list(dict.fromkeys(image for image in images if image.startswith("http")))[:200]
 
     found = db.scalar(select(Listing).where(Listing.url == clean_url))
     payload = {
-        "source": found.source if found else _source_from_url(clean_url),
+        "source": found.source if found else source,
         "url": clean_url,
         "title": best_title,
         "description": best_description,
@@ -216,6 +288,15 @@ def capture_import(
     vehicle.coach_model = identity.get("coach_model")
     vehicle.engine_text = identity.get("engine")
 
+    signal_values = _extract_signals(source, page_text, portal, len(images))
+    signals = db.scalar(select(ListingSignals).where(ListingSignals.listing_id == listing.id))
+    if not signals:
+        signals = ListingSignals(listing_id=listing.id)
+        db.add(signals)
+    for key, value in signal_values.items():
+        if value not in (None, ""):
+            setattr(signals, key, value)
+
     db.add(CaptureSnapshot(
         listing_id=listing.id,
         page_title=title[:2000],
@@ -229,8 +310,13 @@ def capture_import(
     if not state:
         state = ImportState(listing_id=listing.id)
         db.add(state)
+    reported = signals.reported_image_count or len(images)
     state.state = "captured"
-    state.message = f"One-Tap Capture: Seitentext, strukturierte Daten und {len(images)} Bild-URLs übernommen."
+    state.message = f"One-Tap Capture: {len(images)} Bild-URLs gefunden"
+    if reported and reported > len(images):
+        state.message += f"; Portal meldet {reported} Bilder – {reported-len(images)} fehlen noch."
+    else:
+        state.message += "."
     db.commit()
 
     return RedirectResponse(url=f"/listings/{listing.id}?captured=1", status_code=303)
