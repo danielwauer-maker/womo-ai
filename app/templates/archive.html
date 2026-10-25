@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Womo AI · Archiv{% endblock %}
+{% block content %}
+<section class="results-head">
+  <div>
+    <p class="eyebrow">IMPORT-ARCHIV</p>
+    <h1>{{ total }} importierte Inserate</h1>
+    <p>Alle manuell hinzugefügten Links bleiben hier erhalten – unabhängig davon, ob sie bereits analysiert oder später nicht mehr verfügbar sind.</p>
+  </div>
+  <a class="secondary" href="/#batch-import">+ Weitere Links importieren</a>
+</section>
+
+<section class="panel archive-toolbar">
+  <form method="get" action="/archive" class="archive-filters">
+    <label>Quelle
+      <select name="source">
+        <option value="all">Alle</option>
+        {% for s in sources %}<option value="{{ s }}" {% if source==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Importstatus
+      <select name="state">
+        <option value="all" {% if state=='all' %}selected{% endif %}>Alle</option>
+        <option value="extracted" {% if state=='extracted' %}selected{% endif %}>Automatisch übernommen</option>
+        <option value="awaiting_details" {% if state=='awaiting_details' %}selected{% endif %}>Details erforderlich</option>
+        <option value="failed" {% if state=='failed' %}selected{% endif %}>Fehler</option>
+        <option value="processing" {% if state=='processing' %}selected{% endif %}>In Verarbeitung</option>
+      </select>
+    </label>
+    <label>Verfügbarkeit
+      <select name="status">
+        <option value="all" {% if status=='all' %}selected{% endif %}>Alle</option>
+        <option value="active" {% if status=='active' %}selected{% endif %}>Aktiv</option>
+        <option value="inactive" {% if status=='inactive' %}selected{% endif %}>Nicht mehr verfügbar</option>
+      </select>
+    </label>
+    <label>Pro Seite
+      <select name="per_page">
+        {% for n in [10,20,50,100] %}<option value="{{ n }}" {% if per_page==n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="secondary" type="submit">Filter anwenden</button>
+  </form>
+</section>
+
+<section class="archive-list">
+{% for item in items %}
+  <article class="archive-row">
+    <div class="archive-main">
+      <div class="archive-meta">
+        <span class="source-pill">{{ item.source }}</span>
+        <span class="availability {{ item.status }}">{{ 'aktiv' if item.status=='active' else 'nicht mehr verfügbar' }}</span>
+        <span class="import-state {{ item.import_state }}">{{ item.import_state }}</span>
+      </div>
+      <h2>{{ item.title or 'Noch nicht analysiert' }}</h2>
+      <p class="archive-url">{{ item.url }}</p>
+      {% if item.import_message %}<p class="muted">{{ item.import_message }}</p>{% endif %}
+      <div class="facts">
+        <span>{% if item.price is not none %}<strong>{{ "{:,}".format(item.price).replace(",", ".") }} €</strong>{% else %}Preis offen{% endif %}</span>
+        <span>{{ item.year or 'Bj. offen' }}</span>
+        <span>{% if item.mileage is not none %}{{ "{:,}".format(item.mileage).replace(",", ".") }} km{% else %}km offen{% endif %}</span>
+        <span>Erstfund {{ item.first_seen_at.strftime('%d.%m.%Y %H:%M') if item.first_seen_at else '—' }}</span>
+      </div>
+    </div>
+    <div class="archive-actions">
+      <a class="secondary" href="{{ item.url }}" target="_blank" rel="noopener">Original öffnen ↗</a>
+      <form method="post" action="/listings/{{ item.id }}/reprocess"><button class="secondary" type="submit">Erneut verarbeiten</button></form>
+    </div>
+  </article>
+{% else %}
+  <div class="empty"><h2>Noch keine importierten Inserate</h2><p>Füge zuerst Links über den Schnellimport hinzu.</p><a class="primary" href="/#batch-import">Links importieren</a></div>
+{% endfor %}
+</section>
+
+{% if pages > 1 %}
+<nav class="pagination">
+  {% if page > 1 %}<a href="/archive?source={{ source }}&state={{ state }}&status={{ status }}&per_page={{ per_page }}&page={{ page-1 }}">← Zurück</a>{% endif %}
+  <span>Seite {{ page }} von {{ pages }}</span>
+  {% if page < pages %}<a href="/archive?source={{ source }}&state={{ state }}&status={{ status }}&per_page={{ per_page }}&page={{ page+1 }}">Weiter →</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}
