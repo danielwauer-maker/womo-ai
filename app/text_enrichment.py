@@ -105,6 +105,15 @@ def extract_vehicle_identity(primary_text: str, current_title: str = "", fallbac
             if result.get("coach_model"):
                 break
 
+    if coachbuilder == "LMC":
+        m = re.search(r"\bLMC\s+(Liberty\s+\d{4})\b", primary, re.I)
+        if m:
+            result["coach_model"] = re.sub(r"\s+", " ", m.group(1)).strip()
+        else:
+            m = re.search(r"\bLMC\s+(\d{4})\b", primary, re.I)
+            if m:
+                result["coach_model"] = m.group(1)
+
     engine = _engine_from_text(primary_text or "") or _engine_from_text(current_title or "")
     if engine:
         result["engine"] = engine
