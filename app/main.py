@@ -18,7 +18,7 @@ from .repository import upsert_listing
 from .scoring import SearchCriteria, matches_hard_filters, score_listing
 from .search_intent import criteria_from_prompt
 
-app = FastAPI(title="Womo AI", version="0.5.0")
+app = FastAPI(title="Womo AI", version="0.6.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 Base.metadata.create_all(bind=engine)
@@ -147,6 +147,52 @@ def home(
         "extracted": extracted,
         "awaiting": awaiting,
     })
+
+
+@app.get("/share", response_class=HTMLResponse)
+def share_receiver(
+    request: Request,
+    title: str = Query(""),
+    text: str = Query(""),
+    url: str = Query(""),
+    db: Session = Depends(get_db),
+):
+    cleanup_test_data(db)
+    candidates = extract_urls("\n".join([url, text]))
+    shared_url = candidates[0] if candidates else ""
+    existing = db.scalar(select(Listing).where(Listing.url == shared_url)) if shared_url else None
+    return templates.TemplateResponse("share.html", {
+        "request": request,
+        "shared_url": shared_url,
+        "shared_title": title.strip(),
+        "shared_text": text.strip(),
+        "existing": listing_dict(existing) if existing else None,
+    })
+
+
+@app.post("/share/import")
+def share_import(
+    url: str = Form(...),
+    title: str = Form(""),
+    text: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    clean_url = normalize_url(url)
+    if not clean_url:
+        return RedirectResponse(url="/share", status_code=303)
+    found = db.scalar(select(Listing).where(Listing.url == clean_url))
+    if found:
+        listing = upsert_listing(db, {"source": found.source, "url": clean_url, "status": "active"})
+    else:
+        listing = upsert_listing(db, {
+            "source": detect_source(clean_url),
+            "url": clean_url,
+            "title": title.strip() or "Noch nicht analysiert",
+            "description": text.strip(),
+            "status": "active",
+        })
+    process_listing(db, listing)
+    return RedirectResponse(url=f"/archive?shared={listing.id}", status_code=303)
 
 
 @app.get("/archive", response_class=HTMLResponse)
@@ -375,4 +421,4 @@ def source_status():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.5.0"}
+    return {"status": "ok", "version": "0.6.0"}
