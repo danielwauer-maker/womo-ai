@@ -1,0 +1,39 @@
+{
+  "name": "Womo AI",
+  "short_name": "Womo AI",
+  "description": "KI-gestützter Wohnmobilfinder und Inserat-Archiv",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#15243a",
+  "icons": [
+    {
+      "src": "/static/womo-ai-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "Inserat importieren",
+      "short_name": "Import",
+      "url": "/share"
+    },
+    {
+      "name": "Archiv öffnen",
+      "short_name": "Archiv",
+      "url": "/archive"
+    }
+  ]
+}
