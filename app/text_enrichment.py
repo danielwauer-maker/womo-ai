@@ -12,7 +12,7 @@ BASE_VEHICLES = {
 }
 
 COACHBUILDERS = [
-    "LMC", "Hymer", "Dethleffs", "Bürstner", "Buerstner", "Knaus", "Hobby",
+    "Roller Team", "LMC", "Hymer", "Dethleffs", "Bürstner", "Buerstner", "Knaus", "Hobby",
     "Eura Mobil", "Niesmann + Bischoff", "Niesmann", "Laika", "Ahorn", "Adria",
     "Frankia", "Concorde", "Weinsberg", "Chausson", "Elnagh", "Rimor", "CI",
 ]
@@ -39,6 +39,15 @@ def _engine_from_text(text: str) -> str | None:
             value = re.sub(r"\s+", " ", m.group(1)).strip().replace(",", ".")
             value = re.sub(r"\bliter\b", "l", value, flags=re.I)
             return value
+
+    # If only displacement + fuel are explicitly stated, derive a neutral displacement label.
+    cc = re.search(r"(?:hubraum|ccm|cm³|cm3)\s*[:\-]?\s*([0-9.\s]{4,6})\s*(?:cm³|cm3|ccm)?", text, re.I)
+    diesel = re.search(r"(?:kraftstoff\s*[:\-]?\s*)?diesel\b", text, re.I)
+    if cc and diesel:
+        value = _number(cc.group(1))
+        if value and 1000 <= value <= 8000:
+            litres = value / 1000
+            return f"{litres:.1f} l Diesel ({value} cm³)"
     return None
 
 
@@ -71,9 +80,8 @@ def extract_vehicle_identity(primary_text: str, current_title: str = "", fallbac
     if not result.get("base_make"):
         detect_base(fallback[:12000])
 
-    combined = primary
     for name in COACHBUILDERS:
-        if re.search(rf"\b{re.escape(name)}\b", combined, re.I):
+        if re.search(rf"\b{re.escape(name)}\b", primary, re.I):
             result["coachbuilder"] = "Bürstner" if name == "Buerstner" else name
             break
     if not result.get("coachbuilder"):
@@ -89,12 +97,12 @@ def extract_vehicle_identity(primary_text: str, current_title: str = "", fallbac
             variants.append("Buerstner")
         for variant in variants:
             m = re.search(
-                rf"\b{re.escape(variant)}\b\s+([A-Za-z0-9][A-Za-z0-9+\- ]{{1,35}})",
+                rf"\b{re.escape(variant)}\b\s+([A-Za-z0-9][A-Za-z0-9+\- ]{{0,35}})",
                 primary,
                 re.I,
             )
             if m:
-                candidate = re.split(r"(?:Bj\.?|Baujahr|EZ|,|\||\n|\(|für\s+€)", m.group(1), maxsplit=1, flags=re.I)[0].strip(" -")
+                candidate = re.split(r"(?:mit\s+folgenden|Bj\.?|Baujahr|EZ|,|\||\n|\(|für\s+€)", m.group(1), maxsplit=1, flags=re.I)[0].strip(" -")
                 if candidate:
                     result["coach_model"] = candidate[:80]
                 break
@@ -150,11 +158,11 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
         if m:
             result["power_kw"] = round(int(m.group(1)) * 0.735499)
 
-    m = re.search(r"(?:zul(?:ässiges|\.)?\s*gesamtgewicht|gesamtgewicht|zgg)\s*[:\-]?\s*(\d{4})\s*kg", raw, re.I)
+    m = re.search(r"(?:zul(?:ässiges|\.)?\s*gesamtgewicht|gesamtgewicht|zgg)\s*[:\-]?\s*([0-9]{1,2}(?:[\.\s][0-9]{3})|[0-9]{4})\s*kg", raw, re.I)
     if not m:
-        m = re.search(r"\b(3[0-9]{3})\s*kg\b", raw, re.I)
+        m = re.search(r"\b(3(?:[\.\s]?[0-9]{3}))\s*kg\b", raw, re.I)
     if m:
-        result["weight_kg"] = int(m.group(1))
+        result["weight_kg"] = _number(m.group(1))
 
     m = re.search(r"(?:sitzplätze|sitzplaetze|zugelassene\s+sitzplätze)\s*[:\-]?\s*(\d)", raw, re.I)
     if m:
@@ -180,7 +188,7 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
         result["repair_level"] = "heavy"
     elif re.search(r"(?:reparatur|bastler|projekt|defekt|mängel|maengel|rost|elektrik.*(?:offen|machen|defekt))", lower):
         result["repair_level"] = "medium"
-    elif re.search(r"(?:gepflegt|fahrbereit|sofort einsatzbereit|keine mängel|keine maengel)", lower):
+    elif re.search(r"(?:gepflegt|fahrbereit|sofort einsatzbereit|keine mängel|keine maengel|tadellos)", lower):
         result["repair_level"] = "light"
 
     identity = extract_vehicle_identity(raw, current_title=current_title)
