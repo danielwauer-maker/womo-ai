@@ -26,7 +26,6 @@ class AutoScout24Extractor(BaseExtractor):
 
     def extract(self, **kwargs) -> ExtractionResult:
         result = super().extract(**kwargs)
-        title = kwargs.get("title") or ""
         description = kwargs.get("description") or ""
         page_text = kwargs.get("page_text") or ""
         combined = "\n".join([description, page_text])
@@ -38,7 +37,6 @@ class AutoScout24Extractor(BaseExtractor):
             result.signals["portal_listing_id"] = m.group(1)
 
         technical = extract_technical_data(combined)
-        # Do not map empty/curb weight to gross weight.
         if technical.get("gross_weight_kg"):
             result.fields["weight_kg"] = technical["gross_weight_kg"]
             result.evidence["weight_kg"] = "autoscout24_gross_weight"
@@ -57,13 +55,14 @@ class AutoScout24Extractor(BaseExtractor):
         if re.search(r"(?:^|\n)Alkoven(?:\n|$)", page_text, re.I) or re.search(r"\bAlkoven\b", description, re.I):
             result.fields["body_type"] = "Alkoven"
 
-        # The listing heading is a safer model source than recommendations/footer text.
         heading_lines = [x.strip() for x in page_text.splitlines() if x.strip()][:40]
         if result.identity.get("coachbuilder"):
             maker = result.identity["coachbuilder"]
             for i, line in enumerate(heading_lines):
                 if line.lower() == maker.lower() and i + 1 < len(heading_lines):
                     candidate = heading_lines[i + 1]
+                    candidate = re.split(r"\b(?:Tempomat|Radträger|Markise|Klima|Klimaanlage|Automatik)\b", candidate, maxsplit=1, flags=re.I)[0]
+                    candidate = candidate.strip(" ,-|")
                     if 2 <= len(candidate) <= 80 and not candidate.startswith("€"):
                         result.identity["coach_model"] = candidate
                     break
@@ -84,8 +83,10 @@ class AutoScout24Extractor(BaseExtractor):
                 break
 
         normalized = _normalize_autoscout_images(result.images)
+        reported = self.int_match(r"\b1\s*/\s*(\d{1,3})\b", page_text)
+        if reported:
+            result.signals["reported_image_count"] = reported
         if normalized:
-            result.images = normalized
-            result.signals["reported_image_count"] = self.int_match(r"\b1\s*/\s*(\d{1,3})\b", page_text)
+            result.images = normalized[:reported] if reported else normalized
 
         return result
