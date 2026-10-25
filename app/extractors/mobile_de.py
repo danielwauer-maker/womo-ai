@@ -14,6 +14,15 @@ class MobileDeExtractor(BaseExtractor):
         page_text = kwargs.get("page_text") or ""
         primary = f"{title}\n{description}"
 
+        price_match = re.search(r"für\s+([\d.\s]+)\s*€", title, re.I)
+        if not price_match:
+            price_match = re.search(r"(?:^|\n)\s*([\d.\s]+)\s*€(?:\n|$)", page_text, re.I)
+        if price_match:
+            digits = re.sub(r"\D", "", price_match.group(1))
+            if digits:
+                result.fields["price"] = int(digits)
+                result.evidence["price"] = "mobile_title"
+
         weight = self.int_match(r"Zul[aä]ssiges\s+Gesamtgewicht\s*[:\-]?\s*([\d\.\s]+)\s*kg", primary)
         if weight:
             result.fields["weight_kg"] = weight
@@ -52,8 +61,6 @@ class MobileDeExtractor(BaseExtractor):
                 result.identity["base_model"] = parts[1]
             result.evidence["base_vehicle"] = "provider_description"
 
-        # BaseExtractor already resolves known coachbuilders from title/description.
-        # Only use the explicit Wohnmobil-Ausbau label as a fallback.
         if not result.identity.get("coachbuilder"):
             m = re.search(r"Wohnmobil-Ausbau\s*[:\-]?\s*([^\n\r]+)", primary, re.I)
             if m:
@@ -93,6 +100,10 @@ class MobileDeExtractor(BaseExtractor):
             if current is None or score > current[0]:
                 best[key] = (score, url)
         result.images = dedupe_urls([x[1] for x in best.values()])
+
+        reported = self.int_match(r"\b1\s*/\s*(\d{1,3})\b", page_text)
+        if reported:
+            result.signals["reported_image_count"] = reported
 
         m = re.search(r"\bid\s*[=:]\s*([0-9]{8,})\b", page_text, re.I)
         if m:
