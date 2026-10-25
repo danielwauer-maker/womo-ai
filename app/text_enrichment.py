@@ -1,9 +1,20 @@
 import re
 
-MAKE_NAMES = [
-    "Fiat", "Peugeot", "Citroen", "Mercedes", "Ford", "Renault", "Iveco",
-    "LMC", "Hymer", "Dethleffs", "Buerstner", "Bürstner", "Knaus", "Hobby",
-    "Eura Mobil", "Niesmann", "Laika", "Ahorn", "Adria", "Frankia", "Concorde"
+BASE_VEHICLES = {
+    "Fiat": ["Ducato"],
+    "Peugeot": ["J5", "Boxer"],
+    "Citroen": ["C25", "Jumper"],
+    "Citroën": ["C25", "Jumper"],
+    "Mercedes": ["Sprinter", "T1", "Bremer"],
+    "Ford": ["Transit"],
+    "Renault": ["Master", "Trafic"],
+    "Iveco": ["Daily"],
+}
+
+COACHBUILDERS = [
+    "LMC", "Hymer", "Dethleffs", "Bürstner", "Buerstner", "Knaus", "Hobby",
+    "Eura Mobil", "Niesmann + Bischoff", "Niesmann", "Laika", "Ahorn", "Adria",
+    "Frankia", "Concorde", "Weinsberg", "Chausson", "Elnagh", "Rimor", "CI",
 ]
 
 
@@ -14,29 +25,109 @@ def _number(value: str | None) -> int | None:
     return int(digits) if digits else None
 
 
+def _engine_from_text(text: str) -> str | None:
+    if not text:
+        return None
+    patterns = [
+        # Prefer explicit displacement + turbo/diesel wording.
+        r"\b(\d[\.,]\d\s*(?:l(?:iter)?\s*)?(?:turbo\s*)?diesel)\b",
+        r"\b(\d[\.,]\d\s*(?:tdi|td|jtd|hdi|dci|cdi))\b",
+        r"\b(\d[\.,]\d\s*(?:l(?:iter)?\s*)?diesel)\b",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, text, re.I)
+        if m:
+            value = re.sub(r"\s+", " ", m.group(1)).strip().replace(",", ".")
+            value = re.sub(r"\bliter\b", "l", value, flags=re.I)
+            return value
+    return None
+
+
+def extract_vehicle_identity(primary_text: str, current_title: str = "", fallback_text: str = "") -> dict:
+    """Extract chassis/base vehicle and coachbuilder separately.
+
+    primary_text should be the actual listing description / structured content.
+    fallback_text may contain the whole page and is only consulted for missing values.
+    """
+    primary = f"{current_title}\n{primary_text or ''}".strip()
+    fallback = fallback_text or ""
+    result: dict = {}
+
+    def detect_base(text: str):
+        lower = text.lower()
+        for make, models in BASE_VEHICLES.items():
+            make_variants = [make.lower()]
+            if make == "Citroen":
+                make_variants.append("citroën")
+            if not any(v in lower for v in make_variants):
+                continue
+            result.setdefault("base_make", "Citroën" if make in {"Citroen", "Citroën"} else make)
+            for model in models:
+                if re.search(rf"\b{re.escape(model)}\b", text, re.I):
+                    result.setdefault("base_model", model)
+                    break
+            return
+
+    detect_base(primary)
+    if not result.get("base_make"):
+        detect_base(fallback[:12000])
+
+    combined = primary
+    for name in COACHBUILDERS:
+        if re.search(rf"\b{re.escape(name)}\b", combined, re.I):
+            result["coachbuilder"] = "Bürstner" if name == "Buerstner" else name
+            break
+    if not result.get("coachbuilder"):
+        for name in COACHBUILDERS:
+            if re.search(rf"\b{re.escape(name)}\b", fallback[:12000], re.I):
+                result["coachbuilder"] = "Bürstner" if name == "Buerstner" else name
+                break
+
+    coachbuilder = result.get("coachbuilder")
+    if coachbuilder:
+        # Capture a short model phrase immediately following the coachbuilder.
+        variants = [coachbuilder]
+        if coachbuilder == "Bürstner":
+            variants.append("Buerstner")
+        for variant in variants:
+            m = re.search(
+                rf"\b{re.escape(variant)}\b\s+([A-Za-z0-9][A-Za-z0-9+\- ]{{1,35}})",
+                primary,
+                re.I,
+            )
+            if m:
+                candidate = re.split(r"(?:Bj\.?|Baujahr|EZ|,|\||\n|\(|für\s+€)", m.group(1), maxsplit=1, flags=re.I)[0].strip(" -")
+                if candidate:
+                    result["coach_model"] = candidate[:80]
+                break
+
+    engine = _engine_from_text(primary_text or "")
+    if not engine:
+        engine = _engine_from_text(current_title or "")
+    if not engine:
+        engine = _engine_from_text(fallback[:12000])
+    if engine:
+        result["engine"] = engine
+
+    return result
+
+
 def extract_listing_text(text: str, current_title: str = "") -> dict:
-    """Best-effort extraction from text supplied by the user.
+    """Best-effort extraction from listing-specific text.
 
     The original text remains the source of truth. Unknown values stay unknown.
+    Page-wide fallback text should be handled by the caller only for missing fields.
     """
     raw = (text or "").strip()
     lower = raw.lower()
     result: dict = {}
 
-    # Price: prefer values explicitly followed by EUR / €. The trailing lookahead
-    # accepts whitespace, punctuation or the end of the text without using an
-    # invalid optional word-boundary construct such as ``\b?``.
-    prices = re.findall(
-        r"(?<!\d)(\d{1,3}(?:[\.\s]\d{3})+|\d{4,6})\s*(?:€|eur)(?=\s|$|[.,;:!?])",
-        raw,
-        re.I,
-    )
+    prices = re.findall(r"(?<!\d)(\d{1,3}(?:[\.\s]\d{3})+|\d{4,6})\s*(?:€|eur)(?:\b|\s|$)", raw, re.I)
     if prices:
         result["price"] = _number(prices[0])
 
-    # Mileage.
     mileage_patterns = [
-        r"(?:kilometer(?:stand)?|km[- ]?stand)\s*[:\-]?\s*(\d{1,3}(?:[\.\s]\d{3})+|\d{4,6})",
+        r"(?:kilometer(?:stand)?|km[- ]?stand)\s*[:\-]?\s*(\d{1,3}(?:[\.\s]\d{3})+|\d{4,7})",
         r"(\d{1,3}(?:[\.\s]\d{3})+)\s*km\b",
     ]
     for pattern in mileage_patterns:
@@ -45,7 +136,6 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
             result["mileage"] = _number(m.group(1))
             break
 
-    # Year / first registration.
     year_patterns = [
         r"(?:erstzulassung|ez|baujahr|bj\.?)\s*[:\-]?\s*(?:\d{1,2}[\/.\-])?(19[7-9]\d|20[0-2]\d)",
         r"\b(19[8-9]\d|20[0-2]\d)\b",
@@ -56,7 +146,6 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
             result["year"] = int(m.group(1))
             break
 
-    # Power.
     m = re.search(r"\b(\d{2,3})\s*kW\b", raw, re.I)
     if m:
         result["power_kw"] = int(m.group(1))
@@ -65,30 +154,25 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
         if m:
             result["power_kw"] = round(int(m.group(1)) * 0.735499)
 
-    # Weight.
     m = re.search(r"(?:zul(?:ässiges|\.)?\s*gesamtgewicht|gesamtgewicht|zgg)\s*[:\-]?\s*(\d{4})\s*kg", raw, re.I)
     if not m:
         m = re.search(r"\b(3[0-9]{3})\s*kg\b", raw, re.I)
     if m:
         result["weight_kg"] = int(m.group(1))
 
-    # Seats.
     m = re.search(r"(?:sitzplätze|sitzplaetze|zugelassene\s+sitzplätze)\s*[:\-]?\s*(\d)", raw, re.I)
     if m:
         result["seats"] = int(m.group(1))
 
-    # Body type.
     if "alkoven" in lower:
         result["body_type"] = "Alkoven"
 
-    # Three-point belt. Do not infer absence merely from missing text.
     if re.search(r"3[ -]?punkt[ -]?gurt", lower):
         if re.search(r"(?:kein|ohne|fehlt|nicht vorhanden).{0,30}3[ -]?punkt[ -]?gurt|3[ -]?punkt[ -]?gurt.{0,30}(?:fehlt|nicht vorhanden)", lower):
             result["three_point_belt"] = False
         else:
             result["three_point_belt"] = True
 
-    # Moisture / dry claims.
     if re.search(r"feuchtigkeitsmessung|feuchtemessung", lower) and re.search(r"trocken|keine feuchtigkeit|ohne befund", lower):
         result["dry_status"] = "measured_dry"
     elif re.search(r"(?:dicht|trocken|keine feuchtigkeit|kein wasserschaden)", lower):
@@ -96,7 +180,6 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
     elif re.search(r"(?:feuchtigkeit|wasserschaden|undicht|nass|weichstelle)", lower):
         result["dry_status"] = "unknown"
 
-    # Repair level (conservative).
     if re.search(r"(?:motorschaden|getriebeschaden|starker rost|durchgerostet|wasserschaden|massiv feucht|kernsanierung)", lower):
         result["repair_level"] = "heavy"
     elif re.search(r"(?:reparatur|bastler|projekt|defekt|mängel|maengel|rost|elektrik.*(?:offen|machen|defekt))", lower):
@@ -104,22 +187,14 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
     elif re.search(r"(?:gepflegt|fahrbereit|sofort einsatzbereit|keine mängel|keine maengel)", lower):
         result["repair_level"] = "light"
 
-    # Engine: capture common diesel descriptions.
-    engine_patterns = [
-        r"\b(\d[\.,]\d\s*(?:tdi|td|d|jtd|hdi))\b",
-        r"\b(2[\.,][0-9]\s*(?:turbo\s*)?diesel)\b",
-    ]
-    for pattern in engine_patterns:
-        m = re.search(pattern, raw, re.I)
-        if m:
-            result["engine"] = re.sub(r"\s+", " ", m.group(1)).strip().replace(",", ".")
-            break
+    identity = extract_vehicle_identity(raw, current_title=current_title)
+    if identity.get("engine"):
+        result["engine"] = identity["engine"]
 
-    # Make: only when a known name is explicitly present.
-    combined = f"{current_title} {raw[:1200]}".lower()
-    for make in MAKE_NAMES:
-        if make.lower() in combined:
-            result["make"] = make.replace("Buerstner", "Bürstner")
-            break
+    # Legacy 'make' now prefers the coachbuilder; base vehicle is stored separately.
+    if identity.get("coachbuilder"):
+        result["make"] = identity["coachbuilder"]
+    elif identity.get("base_make"):
+        result["make"] = identity["base_make"]
 
     return result
