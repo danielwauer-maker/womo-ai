@@ -14,7 +14,6 @@ on:
 
 jobs:
   deploy:
-    if: ${{ secrets.HETZNER_HOST != '' && secrets.HETZNER_USER != '' && secrets.HETZNER_SSH_KEY != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy over SSH
@@ -23,7 +22,7 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          port: ${{ secrets.HETZNER_PORT || 22 }}
+          port: ${{ secrets.HETZNER_PORT }}
           script: |
             set -e
             cd /opt/womo-ai
