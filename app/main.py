@@ -197,16 +197,19 @@ def archive(
             continue
         filtered.append(item)
 
-    sorters = {
-        "score_desc": lambda x: (x.get("score") is not None, x.get("score") or -1),
-        "score_asc": lambda x: (x.get("score") is None, -(x.get("score") or 0)),
-        "price_asc": lambda x: (x.get("price") is None, -(x.get("price") or 0)),
-        "price_desc": lambda x: (x.get("price") is not None, x.get("price") or -1),
-        "distance_asc": lambda x: (x.get("distance_km") is None, -(x.get("distance_km") or 0)),
-        "newest": lambda x: (x.get("first_seen_at") is not None, x.get("first_seen_at")),
-    }
-    reverse = sort in {"score_desc", "price_desc", "newest"}
-    filtered.sort(key=sorters.get(sort, sorters["score_desc"]), reverse=reverse)
+    if sort == "score_asc":
+        filtered.sort(key=lambda x: (x.get("score") is None, x.get("score") if x.get("score") is not None else 101))
+    elif sort == "price_asc":
+        filtered.sort(key=lambda x: (x.get("price") is None, x.get("price") if x.get("price") is not None else float("inf")))
+    elif sort == "price_desc":
+        filtered.sort(key=lambda x: (x.get("price") is not None, x.get("price") or -1), reverse=True)
+    elif sort == "distance_asc":
+        filtered.sort(key=lambda x: (x.get("distance_km") is None, x.get("distance_km") if x.get("distance_km") is not None else float("inf")))
+    elif sort == "newest":
+        filtered.sort(key=lambda x: (x.get("first_seen_at") is not None, x.get("first_seen_at")), reverse=True)
+    else:
+        sort = "score_desc"
+        filtered.sort(key=lambda x: (x.get("score") is not None, x.get("score") or -1), reverse=True)
 
     total = len(filtered)
     pages = max(1, ceil(total / per_page))
