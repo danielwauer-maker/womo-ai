@@ -72,29 +72,39 @@ def extract_vehicle_identity(primary_text: str, current_title: str = "", fallbac
 
     detect_base(primary)
     if not result.get("base_make"):
-        detect_base(fallback[:12000])
+        detect_base(fallback[:5000])
 
+    # Coachbuilder must come from title/description first. Fallback is only allowed
+    # when the fallback contains a nearby vehicle heading, not arbitrary recommendations.
     for name in COACHBUILDERS:
         if re.search(rf"\b{re.escape(name)}\b", primary, re.I):
             result["coachbuilder"] = "Bürstner" if name == "Buerstner" else name
             break
     if not result.get("coachbuilder"):
+        header = "\n".join(fallback.splitlines()[:60])
         for name in COACHBUILDERS:
-            if re.search(rf"\b{re.escape(name)}\b", fallback[:12000], re.I):
+            if re.search(rf"\b{re.escape(name)}\b", header, re.I):
                 result["coachbuilder"] = "Bürstner" if name == "Buerstner" else name
                 break
 
     coachbuilder = result.get("coachbuilder")
     if coachbuilder:
-        variants = [coachbuilder]
-        if coachbuilder == "Bürstner":
-            variants.append("Buerstner")
+        variants = [coachbuilder] + (["Buerstner"] if coachbuilder == "Bürstner" else [])
         for variant in variants:
-            m = re.search(rf"\b{re.escape(variant)}\b\s+([A-Za-z0-9][A-Za-z0-9+\- ]{{0,35}})", primary, re.I)
-            if m:
-                candidate = re.split(r"(?:mit\s+folgenden|Bj\.?|Baujahr|EZ|,|\||\n|\(|für\s+€)", m.group(1), maxsplit=1, flags=re.I)[0].strip(" -")
-                if candidate:
+            patterns = [
+                rf"\b{re.escape(variant)}\b\s+([A-Za-z0-9][A-Za-z0-9+\- ]{{1,35}})",
+                rf"\b{re.escape(variant)}\b[^\n]{{0,20}}(?:Modell|Typ)\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9+\- ]{{1,35}})",
+            ]
+            for pattern in patterns:
+                m = re.search(pattern, primary, re.I)
+                if not m:
+                    continue
+                candidate = re.split(r"(?:mit\s+folgenden|Bj\.?|Baujahr|EZ|,|\||\n|\(|für\s+€|\s+-\s+)", m.group(1), maxsplit=1, flags=re.I)[0].strip(" -")
+                candidate = re.sub(r"\s{2,}", " ", candidate)
+                if candidate and len(candidate) >= 2:
                     result["coach_model"] = candidate[:80]
+                    break
+            if result.get("coach_model"):
                 break
 
     engine = _engine_from_text(primary_text or "") or _engine_from_text(current_title or "")
@@ -117,10 +127,14 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
         if m:
             result["mileage"] = _number(m.group(1)); break
 
-    for pattern in [r"(?:erstzulassung|ez|baujahr|bj\.?)\s*[:\-]?\s*(?:\d{1,2}[\/.\-])?(19[7-9]\d|20[0-2]\d)", r"\b(19[8-9]\d|20[0-2]\d)\b"]:
-        m = re.search(pattern, raw, re.I)
-        if m:
-            result["year"] = int(m.group(1)); break
+    # Never use an arbitrary 4-digit year from page text: TÜV/HU/Gas dates can be newer
+    # than the vehicle. Only explicit vehicle-year labels or the title are accepted.
+    labelled_year = re.search(r"(?:erstzulassung|ez|baujahr|bj\.?)\s*[:\-]?\s*(?:\d{1,2}[\/.\-])?(19[7-9]\d|20[0-2]\d)", raw, re.I)
+    title_year = re.search(r"(?:bj\.?|baujahr|ez)\s*[:\-]?\s*(19[7-9]\d|20[0-2]\d)", current_title or "", re.I)
+    if labelled_year:
+        result["year"] = int(labelled_year.group(1))
+    elif title_year:
+        result["year"] = int(title_year.group(1))
 
     m = re.search(r"\b(\d{2,3})\s*kW\b", raw, re.I)
     if m:
@@ -130,7 +144,6 @@ def extract_listing_text(text: str, current_title: str = "") -> dict:
         if m: result["power_kw"] = round(int(m.group(1)) * 0.735499)
 
     m = re.search(r"(?:zul(?:ässiges|\.)?\s*gesamtgewicht|gesamtgewicht|zgg)\s*[:\-]?\s*([0-9]{1,2}(?:[\.\s][0-9]{3})|[0-9]{4})\s*kg", raw, re.I)
-    if not m: m = re.search(r"\b(3(?:[\.\s]?[0-9]{3}))\s*kg\b", raw, re.I)
     if m: result["weight_kg"] = _number(m.group(1))
 
     m = re.search(r"(?:sitzplätze|sitzplaetze|zugelassene\s+sitzplätze)\s*[:\-]?\s*(\d)", raw, re.I)
