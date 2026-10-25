@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Womo AI · Ergebnisse{% endblock %}
+{% block content %}
+<section class="results-head">
+  <div><p class="eyebrow">ERGEBNISSE</p><h1>{{ results|length }} passende Kandidaten</h1><p>Sortiert nach deinem persönlichen WomoScore.</p></div>
+  <a class="secondary" href="/">← Suchprofil ändern</a>
+</section>
+
+<div class="criteria-strip">
+  <span>bis {{ "{:,}".format(criteria.max_price).replace(",", ".") }} €</span>
+  <span>≤ {{ criteria.max_distance_km }} km</span>
+  <span>ab {{ criteria.min_year }}</span>
+  <span>≤ {{ "{:,}".format(criteria.max_mileage).replace(",", ".") }} km</span>
+  {% if criteria.require_three_point_belt %}<span>3-Punkt-Gurt priorisiert</span>{% endif %}
+  {% if criteria.require_alkoven %}<span>Alkoven</span>{% endif %}
+</div>
+
+<section class="cards">
+{% for item in results %}
+  <article class="listing-card">
+    <div class="photo-placeholder"><span>{{ item.body_type }}</span><small>{{ item.source }}</small></div>
+    <div class="listing-main">
+      <div class="listing-top">
+        <div><p class="source">{{ item.source }} · {{ item.location }} · {{ item.distance_km }} km</p><h2>{{ item.title }}</h2></div>
+        <div class="score {% if item.score >= 85 %}great{% elif item.score >= 70 %}good{% else %}warn{% endif %}"><strong>{{ item.score }}</strong><span>/100</span></div>
+      </div>
+      <div class="facts">
+        <span><strong>{{ "{:,}".format(item.price).replace(",", ".") }} €</strong></span>
+        <span>{{ item.year }}</span>
+        <span>{{ "{:,}".format(item.mileage).replace(",", ".") }} km</span>
+        <span>{{ item.engine }}</span>
+        <span>{{ item.weight_kg }} kg</span>
+      </div>
+      <p class="description">{{ item.description }}</p>
+      <div class="analysis-grid">
+        <div><h3>Stärken</h3>{% for positive in item.positives %}<p class="positive">✓ {{ positive }}</p>{% endfor %}</div>
+        <div><h3>Risiken</h3>{% for risk in item.risks %}<p class="risk">! {{ risk }}</p>{% endfor %}</div>
+      </div>
+      <div class="card-footer">
+        <span class="belt {% if item.three_point_belt %}yes{% else %}no{% endif %}">{% if item.three_point_belt %}✓ 3-Punkt-Gurt{% else %}⚠ Gurt ungeklärt{% endif %}</span>
+        <span>Feuchte: {% if item.dry_status == 'measured_dry' %}gemessen trocken{% elif item.dry_status == 'claimed_dry' %}laut Verkäufer trocken{% else %}ungeklärt{% endif %}</span>
+      </div>
+    </div>
+  </article>
+{% else %}
+  <div class="empty"><h2>Keine Kandidaten gefunden</h2><p>Lockere einzelne Kriterien und starte die Suche erneut.</p></div>
+{% endfor %}
+</section>
+{% endblock %}
