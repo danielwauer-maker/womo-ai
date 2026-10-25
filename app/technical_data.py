@@ -3,7 +3,7 @@ import re
 
 
 def _clean(value: str) -> str:
-    return re.sub(r"\s+", " ", (value or "").strip(" \t:-"))
+    return re.sub(r"\s+", " ", (value or "").strip(" \t:-•"))
 
 
 def _int_value(value: str | None) -> int | None:
@@ -16,6 +16,7 @@ def _int_value(value: str | None) -> int | None:
 def _label_value(lines: list[str], labels: tuple[str, ...]) -> str | None:
     normalized = [line.strip() for line in lines]
     for index, line in enumerate(normalized):
+        line = re.sub(r"^[\-•·]+\s*", "", line)
         for label in labels:
             m = re.match(rf"^{re.escape(label)}\s*[:\-]?\s*(.*)$", line, re.I)
             if not m:
@@ -87,11 +88,19 @@ def extract_technical_data(text: str) -> dict:
     if gas_date:
         data["gas_inspection"] = gas_date
 
+    # Common classifieds wording combines both inspections in one sentence.
+    combined = re.search(r"T[ÜU]V\s*(?:&|und)\s*Gaspr[üu]fung\s*(?:bis|gültig\s+bis)?\s*(0?[1-9]|1[0-2])[./-](20\d{2})", text, re.I)
+    if not combined:
+        combined = re.search(r"T[ÜU]V[^\n\r]{0,40}Gaspr[üu]fung[^\n\r]{0,40}(0?[1-9]|1[0-2])[./-](20\d{2})", text, re.I)
+    if combined:
+        date = f"{int(combined.group(1)):02d}/{combined.group(2)}"
+        data.setdefault("inspection", date)
+        data.setdefault("gas_inspection", date)
+
     drive = _label_value(lines, ("Antrieb", "Antriebsart"))
     if drive and re.search(r"Frontantrieb|Heckantrieb|Allrad|4x4", drive, re.I):
         data["drive"] = _clean(drive)
 
-    # Dimensions and weights: only explicit labels count.
     labelled_numeric = {
         "length_cm": ("Gesamtlänge", "Länge"),
         "width_cm": ("Gesamtbreite", "Breite"),
@@ -99,7 +108,7 @@ def extract_technical_data(text: str) -> dict:
         "empty_weight_kg": ("Leergewicht", "Masse in fahrbereitem Zustand"),
         "gross_weight_kg": ("Zulässiges Gesamtgewicht", "Gesamtgewicht", "zGG"),
         "sleeping_places": ("Schlafplätze", "Schlafplaetze", "Betten"),
-        "seats": ("Sitzplätze", "Sitzplaetze", "Sitze"),
+        "seats": ("Sitzplätze", "Sitzplaetze", "Sitze", "Sitze mit Gurt"),
     }
     for key, labels in labelled_numeric.items():
         value = _label_value(lines, labels)
@@ -109,6 +118,10 @@ def extract_technical_data(text: str) -> dict:
             m = re.search(r"\b(\d{1,2})\b", value)
             if m:
                 data[key] = int(m.group(1))
+                if key == "seats" and "Sitze mit Gurt" in labels:
+                    label_line = next((ln for ln in lines if re.sub(r"^[\-•·]+\s*", "", ln).lower().startswith("sitze mit gurt")), None)
+                    if label_line:
+                        data["belted_seats"] = data[key]
             continue
         m = re.search(r"([\d.,]+)\s*(cm|m|kg)\b", value, re.I)
         if not m:
@@ -124,7 +137,6 @@ def extract_technical_data(text: str) -> dict:
         except ValueError:
             pass
 
-    # Common prose fallbacks limited to explicit phrases.
     m = re.search(r"\b(\d+)\s+Sitze\b.*?\b(\d+)\s+(?:Stück\s+)?mit\s+Gurt", text, re.I | re.S)
     if m and "seats" not in data:
         data["seats"] = int(m.group(1))
@@ -145,7 +157,6 @@ def extract_technical_data(text: str) -> dict:
     elif re.search(r"\bH[- ]Kennzeichen\b|Oldtimerzulassung|\bOldtimer\b", text, re.I):
         data["historic_vehicle"] = True
 
-    # Provider claims must stay separate from objective state and only use primary wording.
     condition_patterns = [
         r"technisch\s+wie\s+optisch\s+(?:im\s+)?tadellosen\s+Zustand",
         r"(?:sehr\s+)?gepflegter\s+Zustand",
