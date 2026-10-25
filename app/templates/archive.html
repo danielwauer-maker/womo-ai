@@ -21,6 +21,7 @@
     <label>Importstatus
       <select name="state">
         <option value="all" {% if state=='all' %}selected{% endif %}>Alle</option>
+        <option value="enriched" {% if state=='enriched' %}selected{% endif %}>Text ausgewertet</option>
         <option value="extracted" {% if state=='extracted' %}selected{% endif %}>Automatisch übernommen</option>
         <option value="awaiting_details" {% if state=='awaiting_details' %}selected{% endif %}>Details erforderlich</option>
         <option value="failed" {% if state=='failed' %}selected{% endif %}>Fehler</option>
@@ -52,7 +53,7 @@
         <span class="availability {{ item.status }}">{{ 'aktiv' if item.status=='active' else 'nicht mehr verfügbar' }}</span>
         <span class="import-state {{ item.import_state }}">{{ item.import_state }}</span>
       </div>
-      <h2>{{ item.title or 'Noch nicht analysiert' }}</h2>
+      <h2><a href="/listings/{{ item.id }}" style="color:inherit;text-decoration:none">{{ item.title or 'Noch nicht analysiert' }}</a></h2>
       <p class="archive-url">{{ item.url }}</p>
       {% if item.import_message %}<p class="muted">{{ item.import_message }}</p>{% endif %}
       <div class="facts">
@@ -63,6 +64,7 @@
       </div>
     </div>
     <div class="archive-actions">
+      <a class="primary" href="/listings/{{ item.id }}">Details bearbeiten</a>
       <a class="secondary" href="{{ item.url }}" target="_blank" rel="noopener">Original öffnen ↗</a>
       <form method="post" action="/listings/{{ item.id }}/reprocess"><button class="secondary" type="submit">Erneut verarbeiten</button></form>
     </div>
