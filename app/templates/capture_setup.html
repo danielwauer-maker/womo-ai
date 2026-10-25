@@ -2,7 +2,7 @@
 {% block title %}Womo AI · One-Tap Capture{% endblock %}
 {% block content %}
 <style>
-.capture-panel{padding:24px;margin-bottom:18px}.capture-bookmarklet-box{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:18px 0 12px}.capture-bookmarklet{background:#f38b2a}.bookmarklet-code{width:100%;min-height:92px;border:1px solid #d7dde5;border-radius:10px;padding:12px;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f8fafc;color:#516072}.capture-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:18px 0}.capture-steps article{padding:20px}.capture-steps strong,.capture-steps span{display:block}.capture-steps strong{font-size:17px;margin-bottom:7px}.capture-steps span{color:#687384;font-size:13px}.capture-note h2{margin-top:0}@media(max-width:760px){.capture-steps{grid-template-columns:1fr}.capture-bookmarklet-box>*{width:100%}.capture-panel{padding:18px}}
+.capture-panel{padding:24px;margin-bottom:18px}.capture-bookmarklet-box{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:18px 0 12px}.capture-bookmarklet{background:#f38b2a}.bookmarklet-code{width:100%;min-height:92px;border:1px solid #d7dde5;border-radius:10px;padding:12px;font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f8fafc;color:#516072}.capture-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:18px 0}.capture-steps article{padding:20px}.capture-steps strong,.capture-steps span{display:block}.capture-steps strong{font-size:17px;margin-bottom:7px}.capture-steps span{color:#687384;font-size:13px}.capture-note h2{margin-top:0}.capture-warning{background:#fff4df;border:1px solid #f0d79c;color:#6c4b0d;border-radius:14px;padding:14px 16px;margin-bottom:18px}.capture-warning strong{display:block;margin-bottom:4px}@media(max-width:760px){.capture-steps{grid-template-columns:1fr}.capture-bookmarklet-box>*{width:100%}.capture-panel{padding:18px}}
 </style>
 
 <section class="results-head">
@@ -14,12 +14,24 @@
   <a class="secondary" href="/archive">Zum Archiv</a>
 </section>
 
+{% if error == 'stale_bookmarklet' %}
+<div class="capture-warning">
+  <strong>Der verwendete Favorit ist nicht korrekt eingerichtet.</strong>
+  Er hat direkt <code>/capture/import</code> geöffnet. Ein gültiger Womo-AI-Favorit muss mit <code>javascript:</code> beginnen. Lösche den alten Favoriten und lege ihn unten neu an.
+</div>
+{% elif error == 'invalid_url' %}
+<div class="capture-warning">
+  <strong>Die Inserats-URL konnte nicht übernommen werden.</strong>
+  Bitte öffne die Originalanzeige und starte dort den Womo-AI-Favoriten erneut.
+</div>
+{% endif %}
+
 <section class="panel capture-panel">
   <div class="panel-head">
     <div>
       <p class="eyebrow">SCHRITT 1</p>
       <h2>Capture-Favorit anlegen</h2>
-      <p class="muted">Dieser Favorit sendet an <strong>{{ origin }}</strong>. Fürs Handy musst du diese Setup-Seite deshalb über die Netzwerk-IP deines Laptops öffnen – nicht über 127.0.0.1.</p>
+      <p class="muted">Dieser Favorit sendet an <strong>{{ origin }}</strong>. Die gespeicherte Adresse des Favoriten muss mit <strong>javascript:</strong> beginnen.</p>
     </div>
   </div>
 
@@ -28,12 +40,13 @@
     <button class="secondary" type="button" id="copy-bookmarklet">Bookmarklet-Code kopieren</button>
   </div>
   <textarea id="bookmarklet-code" class="bookmarklet-code" readonly>{{ bookmarklet }}</textarea>
+  <p class="muted"><strong>Kontrolle:</strong> Wenn du den Favoriten bearbeitest, muss die Adresse mit <code>javascript:(()=>...</code> anfangen – nicht mit <code>https://womo-review.bcsentinel.com/capture/import</code>.</p>
 </section>
 
 <section class="capture-steps">
   <article class="panel">
     <strong>Desktop</strong>
-    <span>Ziehe den orangefarbenen Button in deine Lesezeichenleiste. Öffne danach ein Inserat und klicke den Favoriten.</span>
+    <span>Ziehe den orangefarbenen Button in deine Lesezeichenleiste. Falls dein Browser dabei nur einen normalen Link speichert: nutze „Bookmarklet-Code kopieren“, erstelle ein Lesezeichen und ersetze dessen Adresse vollständig durch den kopierten Code.</span>
   </article>
   <article class="panel">
     <strong>iPhone / iPad</strong>
