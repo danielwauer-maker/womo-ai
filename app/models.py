@@ -39,6 +39,7 @@ class Listing(Base):
     captures: Mapped[list["CaptureSnapshot"]] = relationship(back_populates="listing", cascade="all, delete-orphan")
     vehicle_identity: Mapped["VehicleIdentity | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
     signals: Mapped["ListingSignals | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
+    technical_data: Mapped["ListingTechnicalData | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
     import_state: Mapped["ImportState | None"] = relationship(back_populates="listing", cascade="all, delete-orphan", uselist=False)
 
 class ListingImage(Base):
@@ -102,6 +103,14 @@ class ListingSignals(Base):
     raw_signal_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     listing: Mapped[Listing] = relationship(back_populates="signals")
+
+class ListingTechnicalData(Base):
+    __tablename__ = "listing_technical_data"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"), unique=True, index=True)
+    data_json: Mapped[str] = mapped_column(Text, default="{}")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    listing: Mapped[Listing] = relationship(back_populates="technical_data")
 
 class ImportState(Base):
     __tablename__ = "import_states"
