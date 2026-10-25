@@ -1,0 +1,43 @@
+name: Export Review Artifacts
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build review artifacts on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_PORT }}
+          script: |
+            set -e
+            cd /opt/womo-ai
+            rm -rf data/review-artifacts
+            mkdir -p data/review-artifacts
+            docker compose -f docker-compose.review.yml exec -T womo-ai python /app/scripts/build_review_artifacts.py
+
+      - name: Download review artifacts
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: ${{ secrets.HETZNER_PORT }}
+          source: "/opt/womo-ai/data/review-artifacts/*"
+          target: "review-artifacts"
+          strip_components: 4
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: womo-review-artifacts
+          path: review-artifacts/
+          if-no-files-found: error
+          retention-days: 14
