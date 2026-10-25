@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Womo AI · Teilen{% endblock %}
+{% block content %}
+<section class="hero compact-hero">
+  <p class="eyebrow">MOBILER IMPORT</p>
+  <h1>Inserat an Womo AI senden</h1>
+  <p>Prüfe den geteilten Link und übernimm ihn direkt in dein Archiv.</p>
+</section>
+
+<section class="panel share-panel">
+  {% if shared_url %}
+    {% if existing %}
+      <div class="import-summary"><strong>Bereits vorhanden</strong><span>{{ existing.source }}</span></div>
+    {% endif %}
+    <form method="post" action="/share/import" class="share-form">
+      <label>Link
+        <input type="url" name="url" value="{{ shared_url }}" required>
+      </label>
+      <label>Titel
+        <input type="text" name="title" value="{{ shared_title }}" placeholder="Titel (optional)">
+      </label>
+      <label>Geteilter Text / Beschreibung
+        <textarea name="text" rows="6" placeholder="Falls beim Teilen Text mitkommt, wird er hier übernommen.">{{ shared_text }}</textarea>
+      </label>
+      <button class="primary" type="submit">Ins Archiv übernehmen</button>
+    </form>
+  {% else %}
+    <div class="empty">
+      <h2>Kein Link erkannt</h2>
+      <p>Teile einen vollständigen Inserats-Link mit Womo AI oder füge ihn unten manuell ein.</p>
+    </div>
+    <form method="post" action="/share/import" class="share-form share-manual">
+      <label>Inserats-Link<input type="url" name="url" placeholder="https://..." required></label>
+      <input type="hidden" name="title" value="">
+      <input type="hidden" name="text" value="">
+      <button class="primary" type="submit">Ins Archiv übernehmen</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}
