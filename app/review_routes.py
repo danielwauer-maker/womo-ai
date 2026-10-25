@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from .database import get_db
 from .extractors import extract_snapshot
-from .models import Listing, ListingImage, ListingSignals, VehicleIdentity
+from .models import Listing, ListingImage, ListingSignals, ListingTechnicalData, VehicleIdentity
 from .repository import upsert_listing
 from .review_quality import quality_report
 from .scoring import SearchCriteria, score_listing
+from .technical_data import dumps_technical_data, extract_technical_data, loads_technical_data
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
@@ -19,6 +20,14 @@ def _review_payload(listing: Listing) -> dict:
     identity = listing.vehicle_identity
     signals = listing.signals
     latest_capture = max(listing.captures, key=lambda c: c.captured_at) if listing.captures else None
+    technical = loads_technical_data(listing.technical_data.data_json) if listing.technical_data else {}
+    if latest_capture:
+        live_technical = extract_technical_data("\n".join([
+            listing.description or "",
+            latest_capture.page_text or "",
+        ]))
+        technical = {**live_technical, **technical}
+
     data = {
         "id": listing.id,
         "source": listing.source,
@@ -57,6 +66,7 @@ def _review_payload(listing: Listing) -> dict:
         "capture_count": len(listing.captures),
         "last_capture_at": latest_capture.captured_at.isoformat() if latest_capture else None,
         "review_status": "unverified",
+        "technical": technical,
     }
     data["quality"] = quality_report(data)
     if latest_capture:
@@ -152,6 +162,24 @@ def reprocess_snapshot(listing_id: int, db: Session = Depends(get_db)):
     for key, value in result.signals.items():
         if hasattr(signals, key) and value not in (None, ""):
             setattr(signals, key, value)
+
+    technical_values = extract_technical_data("\n".join([
+        listing.description or "",
+        snapshot.page_text or "",
+    ]))
+    technical = db.scalar(select(ListingTechnicalData).where(ListingTechnicalData.listing_id == listing.id))
+    if not technical:
+        technical = ListingTechnicalData(listing_id=listing.id)
+        db.add(technical)
+    technical.data_json = dumps_technical_data(technical_values)
+
+    # Promote safe objective values into the core listing where useful.
+    if technical_values.get("gross_weight_kg") and not listing.weight_kg:
+        listing.weight_kg = technical_values["gross_weight_kg"]
+    if technical_values.get("seats") and not listing.seats:
+        listing.seats = technical_values["seats"]
+    if technical_values.get("moisture_issue"):
+        listing.dry_status = "unknown"
 
     db.commit()
     db.refresh(listing)
