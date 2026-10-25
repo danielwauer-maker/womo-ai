@@ -1,0 +1,127 @@
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
+
+from .database import get_db
+from .models import Listing
+from .repository import upsert_listing
+from .scoring import SearchCriteria, score_listing
+from .text_enrichment import extract_listing_text
+
+router = APIRouter()
+templates = Jinja2Templates(directory="app/templates")
+
+
+def _to_int(value: str) -> int | None:
+    value = (value or "").strip()
+    if not value:
+        return None
+    digits = "".join(ch for ch in value if ch.isdigit())
+    return int(digits) if digits else None
+
+
+@router.get("/listings/{listing_id}", response_class=HTMLResponse)
+def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_db)):
+    listing = db.get(Listing, listing_id)
+    if not listing:
+        return RedirectResponse(url="/archive", status_code=303)
+
+    data = {
+        "id": listing.id,
+        "source": listing.source,
+        "url": listing.url,
+        "title": listing.title,
+        "description": listing.description,
+        "price": listing.price,
+        "year": listing.year,
+        "mileage": listing.mileage,
+        "location": listing.location,
+        "make": listing.make,
+        "model": listing.model,
+        "body_type": listing.body_type,
+        "engine": listing.engine,
+        "power_kw": listing.power_kw,
+        "seats": listing.seats,
+        "weight_kg": listing.weight_kg,
+        "three_point_belt": listing.three_point_belt,
+        "dry_status": listing.dry_status,
+        "repair_level": listing.repair_level,
+        "status": listing.status,
+        "images": [img.remote_url for img in listing.images],
+        "prices": sorted(listing.prices, key=lambda x: x.observed_at, reverse=True),
+        "import_state": listing.import_state.state if listing.import_state else "ready",
+        "import_message": listing.import_state.message if listing.import_state else "",
+    }
+    score, reasons = score_listing(data, SearchCriteria())
+    data["score"] = score
+    data["score_reasons"] = reasons
+    return templates.TemplateResponse("listing_detail.html", {"request": request, "item": data})
+
+
+@router.post("/listings/{listing_id}/enrich")
+def enrich_listing(
+    listing_id: int,
+    raw_text: str = Form(""),
+    title: str = Form(""),
+    price: str = Form(""),
+    year: str = Form(""),
+    mileage: str = Form(""),
+    location: str = Form(""),
+    make: str = Form(""),
+    model: str = Form(""),
+    body_type: str = Form(""),
+    engine: str = Form(""),
+    power_kw: str = Form(""),
+    seats: str = Form(""),
+    weight_kg: str = Form(""),
+    three_point_belt: str = Form("unknown"),
+    dry_status: str = Form("unknown"),
+    repair_level: str = Form("unknown"),
+    db: Session = Depends(get_db),
+):
+    listing = db.get(Listing, listing_id)
+    if not listing:
+        return RedirectResponse(url="/archive", status_code=303)
+
+    extracted = extract_listing_text(raw_text, current_title=title or listing.title)
+    manual = {
+        "source": listing.source,
+        "url": listing.url,
+        "title": title.strip() or listing.title,
+        "description": raw_text.strip() or listing.description,
+        "price": _to_int(price),
+        "year": _to_int(year),
+        "mileage": _to_int(mileage),
+        "location": location.strip() or None,
+        "make": make.strip() or None,
+        "model": model.strip() or None,
+        "body_type": body_type.strip() or None,
+        "engine": engine.strip() or None,
+        "power_kw": _to_int(power_kw),
+        "seats": _to_int(seats),
+        "weight_kg": _to_int(weight_kg),
+        "three_point_belt": True if three_point_belt == "yes" else False if three_point_belt == "no" else None,
+        "dry_status": dry_status if dry_status in {"unknown", "claimed_dry", "measured_dry"} else "unknown",
+        "repair_level": repair_level if repair_level in {"unknown", "light", "medium", "heavy"} else "unknown",
+        "status": listing.status,
+    }
+
+    # Extracted values fill blanks; explicit form values always win.
+    merged = dict(extracted)
+    for key, value in manual.items():
+        if value not in (None, ""):
+            merged[key] = value
+
+    # Re-score with the enriched information before persisting.
+    score, reasons = score_listing(merged, SearchCriteria())
+    merged["score"] = score
+    merged["score_explanation"] = ", ".join(reasons)
+    upsert_listing(db, merged)
+
+    if listing.import_state:
+        listing.import_state.state = "enriched"
+        listing.import_state.message = "Inseratstext wurde übernommen und strukturiert ausgewertet."
+        db.commit()
+
+    return RedirectResponse(url=f"/listings/{listing_id}", status_code=303)
