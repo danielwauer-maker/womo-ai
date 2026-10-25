@@ -17,9 +17,9 @@ router = APIRouter(prefix="/api/review", tags=["review"])
 
 
 def _technical_scope(listing: Listing, latest_capture) -> str:
-    # Kleinanzeigen pages contain lots of recommendations/UI text; seller description
-    # is the authoritative semantic scope. Structured portals can safely use page text.
-    if listing.source == "Kleinanzeigen":
+    # Free-form marketplaces and mobile.de contain recommendations/footer content in
+    # page_text. Their seller/provider description is the authoritative semantic scope.
+    if listing.source in {"Kleinanzeigen", "mobile.de"}:
         return listing.description or ""
     return "\n".join([
         listing.description or "",
@@ -34,7 +34,6 @@ def _review_payload(listing: Listing) -> dict:
     technical = loads_technical_data(listing.technical_data.data_json) if listing.technical_data else {}
     if latest_capture:
         live_technical = extract_technical_data(_technical_scope(listing, latest_capture))
-        # Fresh parser output is authoritative over previously persisted extraction.
         technical = {**technical, **live_technical}
 
     data = {
@@ -148,8 +147,6 @@ def reprocess_snapshot(listing_id: int, db: Session = Depends(get_db)):
     payload["score_explanation"] = ", ".join(reasons)
     upsert_listing(db, payload)
 
-    # Reprocess means "rebuild parser-owned values from the stored snapshot".
-    # Explicitly replace stale values instead of only filling blanks.
     replaceable_fields = (
         "price", "year", "mileage", "body_type", "engine", "power_kw",
         "seats", "weight_kg", "three_point_belt", "dry_status", "repair_level",
@@ -195,7 +192,6 @@ def reprocess_snapshot(listing_id: int, db: Session = Depends(get_db)):
         db.add(technical)
     technical.data_json = dumps_technical_data(technical_values)
 
-    # Only gross weight is promoted into the generic weight field.
     if technical_values.get("gross_weight_kg"):
         listing.weight_kg = technical_values["gross_weight_kg"]
     if technical_values.get("seats"):
