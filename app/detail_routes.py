@@ -31,6 +31,11 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
         return RedirectResponse(url="/archive", status_code=303)
 
     identity = listing.vehicle_identity
+    signals = listing.signals
+    captured_images = len(listing.images)
+    reported_images = signals.reported_image_count if signals else None
+    missing_images = max(0, (reported_images or captured_images) - captured_images)
+
     data = {
         "id": listing.id,
         "source": listing.source,
@@ -58,6 +63,19 @@ def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_
         "coach_model": identity.coach_model if identity else None,
         "engine_text": identity.engine_text if identity else listing.engine,
         "images": [img.remote_url for img in listing.images],
+        "reported_image_count": reported_images,
+        "missing_image_count": missing_images,
+        "portal_listing_id": signals.portal_listing_id if signals else None,
+        "listed_at_text": signals.listed_at_text if signals else None,
+        "seller_name": signals.seller_name if signals else None,
+        "seller_type": signals.seller_type if signals else None,
+        "seller_active_since": signals.seller_active_since if signals else None,
+        "seller_ads_online": signals.seller_ads_online if signals else None,
+        "seller_ads_total": signals.seller_ads_total if signals else None,
+        "seller_badges": signals.seller_badges if signals else None,
+        "views": signals.views if signals else None,
+        "watchers": signals.watchers if signals else None,
+        "dealer_name": signals.dealer_name if signals else None,
         "prices": sorted(listing.prices, key=lambda x: x.observed_at, reverse=True),
         "capture_count": len(listing.captures),
         "last_capture_at": max((capture.captured_at for capture in listing.captures), default=None),
