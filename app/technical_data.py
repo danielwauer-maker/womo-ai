@@ -17,7 +17,8 @@ def _label_value(lines: list[str], labels: tuple[str, ...]) -> str | None:
     normalized = [line.strip() for line in lines]
     for index, line in enumerate(normalized):
         line = re.sub(r"^[\-•·]+\s*", "", line)
-        for label in labels:
+        # Specific labels must win over prefixes, e.g. "Sitze mit Gurt" before "Sitze".
+        for label in sorted(labels, key=len, reverse=True):
             m = re.match(rf"^{re.escape(label)}\s*[:\-]?\s*(.*)$", line, re.I)
             if not m:
                 continue
@@ -88,7 +89,6 @@ def extract_technical_data(text: str) -> dict:
     if gas_date:
         data["gas_inspection"] = gas_date
 
-    # Common classifieds wording combines both inspections in one sentence.
     combined = re.search(r"T[ÜU]V\s*(?:&|und)\s*Gaspr[üu]fung\s*(?:bis|gültig\s+bis)?\s*(0?[1-9]|1[0-2])[./-](20\d{2})", text, re.I)
     if not combined:
         combined = re.search(r"T[ÜU]V[^\n\r]{0,40}Gaspr[üu]fung[^\n\r]{0,40}(0?[1-9]|1[0-2])[./-](20\d{2})", text, re.I)
@@ -108,7 +108,7 @@ def extract_technical_data(text: str) -> dict:
         "empty_weight_kg": ("Leergewicht", "Masse in fahrbereitem Zustand"),
         "gross_weight_kg": ("Zulässiges Gesamtgewicht", "Gesamtgewicht", "zGG"),
         "sleeping_places": ("Schlafplätze", "Schlafplaetze", "Betten"),
-        "seats": ("Sitzplätze", "Sitzplaetze", "Sitze", "Sitze mit Gurt"),
+        "seats": ("Sitze mit Gurt", "Sitzplätze", "Sitzplaetze", "Sitze"),
     }
     for key, labels in labelled_numeric.items():
         value = _label_value(lines, labels)
@@ -118,7 +118,7 @@ def extract_technical_data(text: str) -> dict:
             m = re.search(r"\b(\d{1,2})\b", value)
             if m:
                 data[key] = int(m.group(1))
-                if key == "seats" and "Sitze mit Gurt" in labels:
+                if key == "seats":
                     label_line = next((ln for ln in lines if re.sub(r"^[\-•·]+\s*", "", ln).lower().startswith("sitze mit gurt")), None)
                     if label_line:
                         data["belted_seats"] = data[key]
