@@ -54,8 +54,6 @@ class KleinanzeigenExtractor(BaseExtractor):
         if badges:
             result.signals["seller_badges"] = ", ".join(badges)
 
-        # For free-form classifieds, technical semantics must come from the seller
-        # description. The rest of the page contains recommendations and UI text.
         technical = extract_technical_data(description)
         if technical.get("gross_weight_kg"):
             result.fields["weight_kg"] = technical["gross_weight_kg"]
@@ -90,6 +88,6 @@ class KleinanzeigenExtractor(BaseExtractor):
             result.signals["reported_image_count"] = reported
         normalized = _normalize_kleinanzeigen_images(result.images)
         if normalized:
-            result.images = normalized
+            result.images = normalized[:reported] if reported else normalized
 
         return result
